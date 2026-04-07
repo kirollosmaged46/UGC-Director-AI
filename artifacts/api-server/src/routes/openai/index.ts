@@ -42,8 +42,12 @@ router.post("/conversations", async (req, res) => {
 });
 
 router.get("/conversations/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
   try {
-    const id = Number(req.params.id);
     const [conv] = await db.select().from(conversations).where(eq(conversations.id, id));
     if (!conv) {
       res.status(404).json({ error: "Not found" });
@@ -58,8 +62,12 @@ router.get("/conversations/:id", async (req, res) => {
 });
 
 router.delete("/conversations/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
   try {
-    const id = Number(req.params.id);
     const [conv] = await db.select().from(conversations).where(eq(conversations.id, id));
     if (!conv) {
       res.status(404).json({ error: "Not found" });
@@ -75,8 +83,12 @@ router.delete("/conversations/:id", async (req, res) => {
 });
 
 router.get("/conversations/:id/messages", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
   try {
-    const id = Number(req.params.id);
     const msgs = await db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt);
     res.json(msgs);
   } catch (err) {

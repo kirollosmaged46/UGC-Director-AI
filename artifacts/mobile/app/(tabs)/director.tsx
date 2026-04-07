@@ -7,6 +7,8 @@ import {
   Pressable,
   Platform,
   Alert,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -71,7 +73,7 @@ function OptionChip({
   selected: boolean;
   onPress: () => void;
   children: React.ReactNode;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
   return (

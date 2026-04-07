@@ -14,6 +14,8 @@ const GenerateSchema = z.object({
   lighting: z.enum(["golden-hour", "studio-white", "moody-dark", "outdoor-natural", "neon"]),
   aspectRatio: z.enum(["9:16", "1:1", "4:5", "16:9"]),
   count: z.number().int().min(1).max(3),
+  // Note: "both" is not a valid server-side value. When the client wants both photo and
+  // video_concept outputs, it issues two separate requests (one per contentType).
   contentType: z.enum(["photo", "video_concept"]),
   platform: z.enum(["tiktok", "instagram", "youtube"]).default("instagram"),
   creativeVision: z.string().max(2000).optional(),
