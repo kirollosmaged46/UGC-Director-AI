@@ -140,7 +140,6 @@ export default function ChatScreen() {
   }, [input, isSending, conversationId, createConversation, setConversationId, setCreativeVision, baseUrl]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const renderMessage = useCallback(({ item }: { item: ChatMessage }) => {
     const isUser = item.role === "user";
@@ -205,7 +204,7 @@ export default function ChatScreen() {
         style={[
           styles.inputArea,
           {
-            paddingBottom: bottomPad + 8,
+            paddingBottom: insets.bottom + 8,
             borderTopColor: colors.border,
             backgroundColor: colors.background,
           },

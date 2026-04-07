@@ -92,10 +92,9 @@ function OptionChip({
 export default function DirectorScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { settings, updateSettings, productImageUri } = useUGC();
+  const { settings, updateSettings, productImageUri, triggerGenerate, setCurrentResult } = useUGC();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const handleGenerate = useCallback(() => {
     if (!productImageUri) {
@@ -103,8 +102,10 @@ export default function DirectorScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setCurrentResult(null);
+    triggerGenerate();
     router.push("/(tabs)/generate");
-  }, [productImageUri]);
+  }, [productImageUri, triggerGenerate, setCurrentResult]);
 
   const pick = useCallback(
     <T,>(key: keyof typeof settings, value: T) => {
@@ -120,7 +121,7 @@ export default function DirectorScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: topPad + 16, paddingBottom: bottomPad + 120 },
+          { paddingTop: topPad + 16, paddingBottom: insets.bottom + 20 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -362,7 +363,7 @@ export default function DirectorScreen() {
           styles.footer,
           {
             backgroundColor: colors.background,
-            paddingBottom: bottomPad + 12,
+            paddingBottom: insets.bottom + 8,
             borderTopColor: colors.border,
           },
         ]}

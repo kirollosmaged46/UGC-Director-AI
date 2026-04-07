@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type CameraAngle = "overhead" | "eye-level" | "low-angle" | "dutch-tilt" | "close-up" | "wide";
 export type LightingMood = "golden-hour" | "studio-white" | "moody-dark" | "outdoor-natural" | "neon";
@@ -61,6 +60,8 @@ interface UGCContextValue {
   setCurrentResult: (r: GenerationResult | null) => void;
   isGenerating: boolean;
   setIsGenerating: (v: boolean) => void;
+  generateTrigger: number;
+  triggerGenerate: () => void;
 }
 
 const UGCContext = createContext<UGCContextValue | null>(null);
@@ -82,6 +83,7 @@ export function UGCProvider({ children }: { children: React.ReactNode }) {
   const [history, setHistory] = useState<GenerationResult[]>([]);
   const [currentResult, setCurrentResult] = useState<GenerationResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generateTrigger, setGenerateTrigger] = useState(0);
 
   const updateSettings = useCallback((partial: Partial<UGCSettings>) => {
     setSettings((prev) => ({ ...prev, ...partial }));
@@ -89,6 +91,10 @@ export function UGCProvider({ children }: { children: React.ReactNode }) {
 
   const addToHistory = useCallback((result: GenerationResult) => {
     setHistory((prev) => [result, ...prev]);
+  }, []);
+
+  const triggerGenerate = useCallback(() => {
+    setGenerateTrigger((n) => n + 1);
   }, []);
 
   return (
@@ -108,6 +114,8 @@ export function UGCProvider({ children }: { children: React.ReactNode }) {
         setCurrentResult,
         isGenerating,
         setIsGenerating,
+        generateTrigger,
+        triggerGenerate,
       }}
     >
       {children}

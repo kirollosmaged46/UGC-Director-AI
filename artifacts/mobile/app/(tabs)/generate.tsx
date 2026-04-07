@@ -29,7 +29,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
 import { useUGC, type GenerationResult } from "@/context/UGCContext";
-import { router } from "expo-router";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -53,7 +52,7 @@ async function uriToBase64(uri: string): Promise<string> {
   return base64;
 }
 
-function PulsingDot({ color, delay }: { color: string; delay: number }) {
+function PulsingDot({ color }: { color: string }) {
   const opacity = useSharedValue(0.3);
   useEffect(() => {
     opacity.value = withRepeat(
@@ -66,7 +65,9 @@ function PulsingDot({ color, delay }: { color: string; delay: number }) {
   }, []);
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
-    <Animated.View style={[{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, marginHorizontal: 3 }, style]} />
+    <Animated.View
+      style={[{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, marginHorizontal: 3 }, style]}
+    />
   );
 }
 
@@ -85,9 +86,9 @@ function GeneratingView({ colors }: { colors: ReturnType<typeof useColors> }) {
       </Animated.View>
       <Text style={[styles.generatingTitle, { color: colors.foreground }]}>Generating</Text>
       <View style={styles.dotsRow}>
-        <PulsingDot color={colors.primary} delay={0} />
-        <PulsingDot color={colors.accent} delay={200} />
-        <PulsingDot color={colors.primary} delay={400} />
+        <PulsingDot color={colors.primary} />
+        <PulsingDot color={colors.accent} />
+        <PulsingDot color={colors.primary} />
       </View>
       <Text style={[styles.generatingHint, { color: colors.mutedForeground }]}>
         Creating authentic UGC content...
@@ -99,131 +100,163 @@ function GeneratingView({ colors }: { colors: ReturnType<typeof useColors> }) {
 export default function GenerateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { productImageUri, settings, creativeVision, addToHistory, currentResult, setCurrentResult, setIsGenerating } = useUGC();
+  const {
+    productImageUri,
+    settings,
+    creativeVision,
+    addToHistory,
+    currentResult,
+    setCurrentResult,
+    setIsGenerating,
+    generateTrigger,
+  } = useUGC();
+
   const [isLoading, setIsLoading] = useState(false);
   const [hooks, setHooks] = useState<Array<{ text: string; platform: string }>>([]);
   const [generatingHooks, setGeneratingHooks] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const hasFetched = useRef(false);
-  const generateRef = useRef<() => void>(() => {});
+  const isRunning = useRef(false);
 
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const fetchHooks = useCallback(async (productDesc: string, platform: string) => {
-    setGeneratingHooks(true);
-    try {
-      const response = await fetch(`${baseUrl}/api/ugc/hooks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productDescription: productDesc,
-          platform,
-          tone: "authentic",
-          imageContext: creativeVision || undefined,
-        }),
-      });
-      const data = await response.json() as { hooks: Array<{ text: string; platform: string }> };
-      setHooks(data.hooks ?? []);
-    } catch {
-      // silently ignore hook generation failures
-    } finally {
-      setGeneratingHooks(false);
-    }
-  }, [baseUrl, creativeVision]);
-
-  const generate = useCallback(async () => {
-    if (!productImageUri || hasFetched.current) return;
-    hasFetched.current = true;
-    setIsLoading(true);
-    setIsGenerating(true);
-
-    try {
-      const base64 = await uriToBase64(productImageUri);
-
-      const count = settings.contentType === "both" ? 1 : settings.count;
-      const responses: Array<{ images: any[]; videoConcepts: any[] }> = [];
-
-      if (settings.contentType === "photo" || settings.contentType === "both") {
-        const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
+  const fetchHooks = useCallback(
+    async (productDesc: string, platform: string) => {
+      setGeneratingHooks(true);
+      try {
+        const response = await fetch(`${baseUrl}/api/ugc/hooks`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            imageBase64: base64,
-            angle: settings.angle,
-            lighting: settings.lighting,
-            aspectRatio: settings.aspectRatio,
-            count: settings.count,
-            contentType: "photo",
-            platform: settings.platform,
-            creativeVision: creativeVision || undefined,
+            productDescription: productDesc,
+            platform,
+            tone: "authentic",
+            imageContext: creativeVision || undefined,
           }),
         });
-        const data = await resp.json() as { images: any[]; videoConcepts: any[] };
-        responses.push(data);
+        const data = (await response.json()) as {
+          hooks: Array<{ text: string; platform: string }>;
+        };
+        setHooks(data.hooks ?? []);
+      } catch {
+        // silently ignore
+      } finally {
+        setGeneratingHooks(false);
       }
+    },
+    [baseUrl, creativeVision]
+  );
 
-      if (settings.contentType === "video_concept" || settings.contentType === "both") {
-        const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageBase64: base64,
-            angle: settings.angle,
-            lighting: settings.lighting,
-            aspectRatio: settings.aspectRatio,
-            count: settings.count,
-            contentType: "video_concept",
-            platform: settings.platform,
-            creativeVision: creativeVision || undefined,
-          }),
-        });
-        const data = await resp.json() as { images: any[]; videoConcepts: any[] };
-        responses.push(data);
+  const runGeneration = useCallback(
+    async (imgUri: string) => {
+      if (isRunning.current) return;
+      isRunning.current = true;
+      setIsLoading(true);
+      setIsGenerating(true);
+      setHooks([]);
+
+      try {
+        const base64 = await uriToBase64(imgUri);
+        const responses: Array<{ images: any[]; videoConcepts: any[] }> = [];
+
+        if (settings.contentType === "photo" || settings.contentType === "both") {
+          const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageBase64: base64,
+              angle: settings.angle,
+              lighting: settings.lighting,
+              aspectRatio: settings.aspectRatio,
+              count: settings.count,
+              contentType: "photo",
+              platform: settings.platform,
+              creativeVision: creativeVision || undefined,
+            }),
+          });
+          const data = (await resp.json()) as { images: any[]; videoConcepts: any[] };
+          responses.push(data);
+        }
+
+        if (settings.contentType === "video_concept" || settings.contentType === "both") {
+          const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageBase64: base64,
+              angle: settings.angle,
+              lighting: settings.lighting,
+              aspectRatio: settings.aspectRatio,
+              count: settings.count,
+              contentType: "video_concept",
+              platform: settings.platform,
+              creativeVision: creativeVision || undefined,
+            }),
+          });
+          const data = (await resp.json()) as { images: any[]; videoConcepts: any[] };
+          responses.push(data);
+        }
+
+        const allImages = responses.flatMap((r) => r.images ?? []);
+        const allConcepts = responses.flatMap((r) => r.videoConcepts ?? []);
+
+        const result: GenerationResult = {
+          id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+          productImageUri: imgUri,
+          images: allImages,
+          videoConcepts: allConcepts,
+          hooks: [],
+          angle: settings.angle,
+          lighting: settings.lighting,
+          aspectRatio: settings.aspectRatio,
+          platform: settings.platform,
+          contentType: settings.contentType,
+          createdAt: Date.now(),
+        };
+
+        setCurrentResult(result);
+        addToHistory(result);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        fetchHooks(creativeVision || "lifestyle product", settings.platform);
+      } catch {
+        Alert.alert("Generation Failed", "Something went wrong. Please try again.", [
+          {
+            text: "Retry",
+            onPress: () => {
+              isRunning.current = false;
+              if (productImageUri) runGeneration(productImageUri);
+            },
+          },
+          { text: "Dismiss" },
+        ]);
+      } finally {
+        setIsLoading(false);
+        setIsGenerating(false);
+        isRunning.current = false;
       }
-
-      const allImages = responses.flatMap((r) => r.images ?? []);
-      const allConcepts = responses.flatMap((r) => r.videoConcepts ?? []);
-
-      const result: GenerationResult = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        productImageUri,
-        images: allImages,
-        videoConcepts: allConcepts,
-        hooks: [],
-        angle: settings.angle,
-        lighting: settings.lighting,
-        aspectRatio: settings.aspectRatio,
-        platform: settings.platform,
-        contentType: settings.contentType,
-        createdAt: Date.now(),
-      };
-
-      setCurrentResult(result);
-      addToHistory(result);
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      fetchHooks(creativeVision || "lifestyle product", settings.platform);
-    } catch (err) {
-      Alert.alert("Generation Failed", "Something went wrong. Please try again.", [
-        { text: "Retry", onPress: () => { hasFetched.current = false; generate(); } },
-        { text: "Go Back", onPress: () => router.back() },
-      ]);
-    } finally {
-      setIsLoading(false);
-      setIsGenerating(false);
-    }
-  }, [productImageUri, settings, creativeVision, baseUrl, addToHistory, setCurrentResult, setIsGenerating, fetchHooks]);
+    },
+    [
+      settings,
+      creativeVision,
+      baseUrl,
+      addToHistory,
+      setCurrentResult,
+      setIsGenerating,
+      fetchHooks,
+      productImageUri,
+    ]
+  );
 
   useEffect(() => {
-    generate();
-  }, []);
+    if (generateTrigger > 0 && productImageUri) {
+      setCurrentResult(null);
+      runGeneration(productImageUri);
+    }
+  }, [generateTrigger]);
 
   const saveImage = useCallback(async (b64: string) => {
     if (Platform.OS === "web") {
-      Alert.alert("Info", "Save not supported on web. Use the share option.");
+      Alert.alert("Info", "Saving is not supported in web preview. Use the share option.");
       return;
     }
     try {
@@ -233,7 +266,9 @@ export default function GenerateScreen() {
         return;
       }
       const fileUri = `${FileSystem.cacheDirectory}ugc_${Date.now()}.png`;
-      await FileSystem.writeAsStringAsync(fileUri, b64, { encoding: FileSystem.EncodingType.Base64 });
+      await FileSystem.writeAsStringAsync(fileUri, b64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
       await MediaLibrary.saveToLibraryAsync(fileUri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Saved", "Image saved to your camera roll.");
@@ -262,19 +297,32 @@ export default function GenerateScreen() {
     );
   }
 
-  if (!currentResult) return null;
+  if (!currentResult) {
+    return (
+      <View style={[styles.container, styles.emptyState, { backgroundColor: colors.background }]}>
+        <MaterialCommunityIcons name="creation" size={48} color={colors.mutedForeground} />
+        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Nothing generated yet</Text>
+        <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+          Upload a product image, set your direction, then tap "Generate Content"
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 12, paddingBottom: bottomPad + 40 }]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad + 12, paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
     >
       <Animated.View entering={FadeInDown.duration(400)}>
         <Text style={[styles.pageTitle, { color: colors.foreground }]}>Your Content</Text>
         <Text style={[styles.pageSub, { color: colors.mutedForeground }]}>
-          {currentResult.images.length} photo{currentResult.images.length !== 1 ? "s" : ""}
-          {currentResult.videoConcepts.length > 0 ? ` + ${currentResult.videoConcepts.length} video concept${currentResult.videoConcepts.length !== 1 ? "s" : ""}` : ""}
+          {currentResult.images.length} photo
+          {currentResult.images.length !== 1 ? "s" : ""}
+          {currentResult.videoConcepts.length > 0
+            ? ` + ${currentResult.videoConcepts.length} video concept${currentResult.videoConcepts.length !== 1 ? "s" : ""}`
+            : ""}
         </Text>
       </Animated.View>
 
@@ -282,7 +330,14 @@ export default function GenerateScreen() {
         <Animated.View
           key={img.index}
           entering={FadeIn.delay(i * 150).duration(400)}
-          style={[styles.imageCard, { backgroundColor: colors.card, borderRadius: colors.radius * 1.5, borderColor: colors.border }]}
+          style={[
+            styles.imageCard,
+            {
+              backgroundColor: colors.card,
+              borderRadius: colors.radius * 1.5,
+              borderColor: colors.border,
+            },
+          ]}
         >
           <Image
             source={{ uri: `data:image/png;base64,${img.b64_json}` }}
@@ -301,11 +356,15 @@ export default function GenerateScreen() {
               style={[styles.actionBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
               onPress={async () => {
                 if (Platform.OS !== "web") {
-                  const fileUri = `${FileSystem.cacheDirectory}ugc_share_${Date.now()}.png`;
-                  await FileSystem.writeAsStringAsync(fileUri, img.b64_json, {
-                    encoding: FileSystem.EncodingType.Base64,
-                  });
-                  await Share.share({ url: fileUri });
+                  try {
+                    const fileUri = `${FileSystem.cacheDirectory}ugc_share_${Date.now()}.png`;
+                    await FileSystem.writeAsStringAsync(fileUri, img.b64_json, {
+                      encoding: FileSystem.EncodingType.Base64,
+                    });
+                    await Share.share({ url: fileUri });
+                  } catch {
+                    // ignore
+                  }
                 }
               }}
             >
@@ -320,7 +379,14 @@ export default function GenerateScreen() {
         <Animated.View
           key={vc.index}
           entering={FadeInDown.delay(200 + i * 100).duration(400)}
-          style={[styles.conceptCard, { backgroundColor: colors.card, borderRadius: colors.radius * 1.5, borderColor: colors.border }]}
+          style={[
+            styles.conceptCard,
+            {
+              backgroundColor: colors.card,
+              borderRadius: colors.radius * 1.5,
+              borderColor: colors.border,
+            },
+          ]}
         >
           <View style={styles.conceptHeader}>
             <MaterialCommunityIcons name="film-outline" size={20} color={colors.primary} />
@@ -362,7 +428,7 @@ export default function GenerateScreen() {
         {!generatingHooks && hooks.length === 0 && (
           <View style={[styles.emptyHooks, { backgroundColor: colors.card, borderRadius: colors.radius }]}>
             <Text style={[styles.emptyHooksText, { color: colors.mutedForeground }]}>
-              Hooks generate after images are ready
+              Hooks will appear here once generated
             </Text>
           </View>
         )}
@@ -371,9 +437,11 @@ export default function GenerateScreen() {
       <Pressable
         style={[styles.regenerateBtn, { borderColor: colors.primary, borderRadius: colors.radius }]}
         onPress={() => {
-          hasFetched.current = false;
-          setCurrentResult(null);
-          generate();
+          if (productImageUri) {
+            setCurrentResult(null);
+            isRunning.current = false;
+            runGeneration(productImageUri);
+          }
         }}
       >
         <MaterialCommunityIcons name="refresh" size={18} color={colors.primary} />
@@ -386,6 +454,14 @@ export default function GenerateScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 20, gap: 20 },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  emptyHint: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
   pageTitle: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   pageSub: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 2 },
   generatingContainer: {
@@ -397,20 +473,9 @@ const styles = StyleSheet.create({
   generatingTitle: { fontSize: 24, fontFamily: "Inter_700Bold" },
   dotsRow: { flexDirection: "row", alignItems: "center" },
   generatingHint: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  imageCard: {
-    borderWidth: 1,
-    overflow: "hidden",
-    gap: 0,
-  },
-  generatedImage: {
-    width: "100%",
-    height: SCREEN_W * 1.2,
-  },
-  imageActions: {
-    flexDirection: "row",
-    gap: 10,
-    padding: 12,
-  },
+  imageCard: { borderWidth: 1, overflow: "hidden" },
+  generatedImage: { width: "100%", height: SCREEN_W * 1.2 },
+  imageActions: { flexDirection: "row", gap: 10, padding: 12 },
   actionBtn: {
     flex: 1,
     height: 42,
@@ -420,11 +485,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  conceptCard: {
-    borderWidth: 1,
-    padding: 16,
-    gap: 10,
-  },
+  conceptCard: { borderWidth: 1, padding: 16, gap: 10 },
   conceptHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   conceptTitle: { fontSize: 16, fontFamily: "Inter_700Bold", flex: 1 },
   conceptBody: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },

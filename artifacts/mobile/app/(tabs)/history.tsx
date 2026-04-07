@@ -76,7 +76,6 @@ export default function HistoryScreen() {
   const { history } = useUGC();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -111,7 +110,7 @@ export default function HistoryScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.list,
-            { paddingTop: 16, paddingBottom: bottomPad + 100 },
+            { paddingTop: 16, paddingBottom: insets.bottom + 24 },
           ]}
           showsVerticalScrollIndicator={false}
         />

@@ -15,14 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  FadeIn,
-  FadeInDown,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
 import { useUGC } from "@/context/UGCContext";
 
@@ -31,9 +24,6 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { productImageUri, setProductImageUri } = useUGC();
   const [picking, setPicking] = useState(false);
-
-  const scale = useSharedValue(1);
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   const pickImage = useCallback(async () => {
     try {
@@ -79,12 +69,11 @@ export default function HomeScreen() {
   }, [productImageUri]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 16, paddingBottom: bottomPad + 100 }]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad + 16, paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
     >
       <Animated.View entering={FadeInDown.duration(600).springify()}>
