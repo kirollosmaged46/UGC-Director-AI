@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { editImages } from "@workspace/integrations-openai-ai-server";
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFile, unlink } from "fs/promises";
 import path from "path";
 import os from "os";
 
@@ -106,7 +106,7 @@ router.post("/generate", async (req, res) => {
       const imageBuffer = Buffer.from(imageBase64, "base64");
       const tmpDir = os.tmpdir();
       const tmpPath = path.join(tmpDir, `ugc-product-${Date.now()}.png`);
-      writeFileSync(tmpPath, imageBuffer);
+      await writeFile(tmpPath, imageBuffer);
       tmpFiles.push(tmpPath);
 
       const concepts = await Promise.all(
@@ -169,7 +169,7 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
     const imageBuffer = Buffer.from(imageBase64, "base64");
     const tmpDir = os.tmpdir();
     const tmpPath = path.join(tmpDir, `ugc-product-${Date.now()}.png`);
-    writeFileSync(tmpPath, imageBuffer);
+    await writeFile(tmpPath, imageBuffer);
     tmpFiles.push(tmpPath);
 
     const generatedImages = [];
@@ -189,7 +189,7 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
   } finally {
     for (const f of tmpFiles) {
       try {
-        unlinkSync(f);
+        await unlink(f);
       } catch {
         // ignore cleanup errors
       }

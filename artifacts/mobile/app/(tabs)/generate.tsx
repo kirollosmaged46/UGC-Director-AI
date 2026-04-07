@@ -147,8 +147,10 @@ export default function GenerateScreen() {
           imageContext: creativeVision || undefined,
         }),
       });
+      if (!response.ok) throw new Error(`Hooks API error: ${response.status}`);
       const data = (await response.json()) as { hooks: Hook[] };
-      return data.hooks ?? [];
+      if (!Array.isArray(data.hooks)) return [];
+      return data.hooks;
     },
     [baseUrl, creativeVision]
   );
@@ -182,7 +184,9 @@ export default function GenerateScreen() {
               creativeVision: creativeVision || undefined,
             }),
           });
+          if (!resp.ok) throw new Error(`Generate API error: ${resp.status}`);
           const data = (await resp.json()) as ApiResponse;
+          if (!Array.isArray(data.images)) throw new Error("Malformed generate response");
           responses.push(data);
         }
 
@@ -201,7 +205,9 @@ export default function GenerateScreen() {
               creativeVision: creativeVision || undefined,
             }),
           });
+          if (!resp.ok) throw new Error(`Generate API error: ${resp.status}`);
           const data = (await resp.json()) as ApiResponse;
+          if (!Array.isArray(data.images)) throw new Error("Malformed generate response");
           responses.push(data);
         }
 
