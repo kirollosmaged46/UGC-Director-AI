@@ -24,7 +24,7 @@ export interface OpenaiMessage {
 }
 
 export interface CreateOpenaiConversationBody {
-  title: string;
+  title?: string;
 }
 
 export interface SendOpenaiMessageBody {

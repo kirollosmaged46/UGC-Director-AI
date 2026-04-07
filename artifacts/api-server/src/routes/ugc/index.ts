@@ -29,7 +29,7 @@ const HooksSchema = z.object({
 });
 
 function aspectRatioToSize(ratio: string): ImageEditSize {
-  if (ratio === "9:16") return "1024x1536";
+  if (ratio === "9:16" || ratio === "4:5") return "1024x1536";
   if (ratio === "16:9") return "1536x1024";
   return "1024x1024";
 }
