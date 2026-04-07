@@ -113,7 +113,7 @@ export default function ChatScreen() {
           for (const line of event.split("\n")) {
             if (!line.startsWith("data: ")) continue;
             try {
-              const payload = JSON.parse(line.slice(6)) as { content?: string; done?: boolean; error?: string };
+              const payload = JSON.parse(line.slice(6)) as { content?: string; done?: boolean; brief?: string; error?: string };
               if (payload.content) {
                 accumulated += payload.content;
                 setMessages((prev) =>
@@ -128,7 +128,7 @@ export default function ChatScreen() {
                     m.id === streamingId ? { ...m, streaming: false } : m
                   )
                 );
-                setCreativeVision(accumulated);
+                setCreativeVision(payload.brief && payload.brief.length > 0 ? payload.brief : accumulated);
               }
             } catch {
               // skip unparseable lines

@@ -28,6 +28,14 @@ const HooksSchema = z.object({
   imageContext: z.string().max(2000).optional(),
 });
 
+const ModelHookSchema = z.object({ text: z.string().min(1), platform: z.string() });
+const ModelHooksResponseSchema = z.object({ hooks: z.array(ModelHookSchema) });
+
+const ModelConceptSchema = z.object({
+  title: z.string().min(1),
+  storyboard: z.string().min(1),
+});
+
 function aspectRatioToSize(ratio: string): ImageEditSize {
   if (ratio === "9:16" || ratio === "4:5") return "1024x1536";
   if (ratio === "16:9") return "1536x1024";
@@ -144,11 +152,7 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
           let concept: { title: string; storyboard: string };
           try {
             const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
-            const parsed = JSON.parse(cleaned) as { title?: string; storyboard?: string };
-            concept = {
-              title: parsed.title ?? `UGC Video Concept ${i + 1}`,
-              storyboard: parsed.storyboard ?? raw,
-            };
+            concept = ModelConceptSchema.parse(JSON.parse(cleaned));
           } catch {
             concept = { title: `UGC Video Concept ${i + 1}`, storyboard: raw };
           }
@@ -249,10 +253,10 @@ Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${p
     const raw = response.choices[0]?.message?.content ?? '{"hooks":[]}';
     try {
       const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
-      const parsedHooks = JSON.parse(cleaned) as { hooks?: Array<{ text: string; platform: string }> };
-      res.json(parsedHooks);
+      const validated = ModelHooksResponseSchema.parse(JSON.parse(cleaned));
+      res.json(validated);
     } catch {
-      req.log.warn({ raw }, "Failed to parse hooks JSON from model; returning empty list");
+      req.log.warn({ raw }, "Failed to parse or validate hooks JSON from model; returning empty list");
       res.json({ hooks: [] });
     }
   } catch (err) {

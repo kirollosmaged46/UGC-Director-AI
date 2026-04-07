@@ -178,7 +178,24 @@ router.post("/conversations/:id/messages", async (req, res) => {
       content: fullResponse,
     });
 
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    let creativeBrief = "";
+    try {
+      const briefResponse = await openai.chat.completions.create({
+        model: "gpt-5.2",
+        max_completion_tokens: 300,
+        messages: [
+          {
+            role: "user",
+            content: `Based on this creative director conversation, extract a concise 1-3 sentence creative brief optimized for AI image generation prompts. Be specific about: visual style, mood, angle/composition, and target vibe. No preamble.\n\nConversation:\n${history.map((m) => `${m.role}: ${m.content}`).join("\n")}\nassistant: ${fullResponse}`,
+          },
+        ],
+      });
+      creativeBrief = briefResponse.choices[0]?.message?.content?.trim() ?? "";
+    } catch {
+      // brief extraction is best-effort; client falls back to full response
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true, brief: creativeBrief })}\n\n`);
     res.end();
   } catch (err) {
     req.log.error({ err }, "Failed to send message");
