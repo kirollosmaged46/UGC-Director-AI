@@ -9,6 +9,7 @@ export type ContentType = "photo" | "video_concept" | "both";
 export interface GeneratedImage {
   b64_json: string;
   index: number;
+  hooks: Hook[];
 }
 
 export interface VideoConcept {

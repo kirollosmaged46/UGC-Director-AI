@@ -31,7 +31,7 @@ import Animated, {
   FadeInDown,
 } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
-import { useUGC, type GenerationResult } from "@/context/UGCContext";
+import { useUGC, type GenerationResult, type GeneratedImage, type VideoConcept, type Hook } from "@/context/UGCContext";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const CARD_W = SCREEN_W - 40;
@@ -127,7 +127,6 @@ export default function GenerateScreen() {
   } = useUGC();
 
   const [isLoading, setIsLoading] = useState(false);
-  const [hooks, setHooks] = useState<Array<{ text: string; platform: string }>>([]);
   const [generatingHooks, setGeneratingHooks] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -136,29 +135,20 @@ export default function GenerateScreen() {
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const fetchHooks = useCallback(
-    async (productDesc: string, platform: string) => {
-      setGeneratingHooks(true);
-      try {
-        const response = await fetch(`${baseUrl}/api/ugc/hooks`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productDescription: productDesc,
-            platform,
-            tone: "authentic",
-            imageContext: creativeVision || undefined,
-          }),
-        });
-        const data = (await response.json()) as {
-          hooks: Array<{ text: string; platform: string }>;
-        };
-        setHooks(data.hooks ?? []);
-      } catch {
-        // silently ignore
-      } finally {
-        setGeneratingHooks(false);
-      }
+  const fetchHooksData = useCallback(
+    async (productDesc: string, platform: string): Promise<Hook[]> => {
+      const response = await fetch(`${baseUrl}/api/ugc/hooks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productDescription: productDesc,
+          platform,
+          tone: "authentic",
+          imageContext: creativeVision || undefined,
+        }),
+      });
+      const data = (await response.json()) as { hooks: Hook[] };
+      return data.hooks ?? [];
     },
     [baseUrl, creativeVision]
   );
@@ -169,11 +159,13 @@ export default function GenerateScreen() {
       isRunning.current = true;
       setIsLoading(true);
       setIsGenerating(true);
-      setHooks([]);
+      setActiveImageIndex(0);
 
       try {
         const base64 = await uriToBase64(imgUri);
-        const responses: Array<{ images: any[]; videoConcepts: any[] }> = [];
+
+        type ApiResponse = { images: Array<{ b64_json: string; index: number }>; videoConcepts: VideoConcept[] };
+        const responses: ApiResponse[] = [];
 
         if (settings.contentType === "photo" || settings.contentType === "both") {
           const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
@@ -190,7 +182,7 @@ export default function GenerateScreen() {
               creativeVision: creativeVision || undefined,
             }),
           });
-          const data = (await resp.json()) as { images: any[]; videoConcepts: any[] };
+          const data = (await resp.json()) as ApiResponse;
           responses.push(data);
         }
 
@@ -209,19 +201,37 @@ export default function GenerateScreen() {
               creativeVision: creativeVision || undefined,
             }),
           });
-          const data = (await resp.json()) as { images: any[]; videoConcepts: any[] };
+          const data = (await resp.json()) as ApiResponse;
           responses.push(data);
         }
 
-        const allImages = responses.flatMap((r) => r.images ?? []);
+        const rawImages = responses.flatMap((r) => r.images ?? []);
         const allConcepts = responses.flatMap((r) => r.videoConcepts ?? []);
+
+        setGeneratingHooks(true);
+        const allHooks = await fetchHooksData(
+          creativeVision || "lifestyle product",
+          settings.platform
+        ).catch(() => [] as Hook[]);
+        setGeneratingHooks(false);
+
+        const allImages: GeneratedImage[] = rawImages.map((img, i) => ({
+          b64_json: img.b64_json,
+          index: img.index,
+          hooks: allHooks.length > 0
+            ? allHooks.slice(
+                i * Math.ceil(allHooks.length / rawImages.length),
+                (i + 1) * Math.ceil(allHooks.length / rawImages.length)
+              )
+            : [],
+        }));
 
         const result: GenerationResult = {
           id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
           productImageUri: imgUri,
           images: allImages,
           videoConcepts: allConcepts,
-          hooks: [],
+          hooks: allHooks,
           angle: settings.angle,
           lighting: settings.lighting,
           aspectRatio: settings.aspectRatio,
@@ -233,7 +243,6 @@ export default function GenerateScreen() {
         setCurrentResult(result);
         addToHistory(result);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        fetchHooks(creativeVision || "lifestyle product", settings.platform);
       } catch {
         Alert.alert("Generation Failed", "Something went wrong. Please try again.", [
           {
@@ -258,7 +267,7 @@ export default function GenerateScreen() {
       addToHistory,
       setCurrentResult,
       setIsGenerating,
-      fetchHooks,
+      fetchHooksData,
       productImageUri,
     ]
   );
@@ -353,7 +362,10 @@ export default function GenerateScreen() {
             scrollEventThrottle={16}
             onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
               const idx = Math.round(e.nativeEvent.contentOffset.x / CARD_W);
-              setActiveImageIndex(idx);
+              if (idx !== activeImageIndex) {
+                setActiveImageIndex(idx);
+                setCopiedIndex(null);
+              }
             }}
             renderItem={({ item }) => (
               <View
@@ -451,13 +463,15 @@ export default function GenerateScreen() {
 
       <Animated.View entering={FadeInDown.delay(400).duration(400)} style={styles.hooksSection}>
         <View style={styles.hooksTitleRow}>
-          <Text style={[styles.hooksTitle, { color: colors.foreground }]}>Hooks</Text>
+          <Text style={[styles.hooksTitle, { color: colors.foreground }]}>
+            Hooks {currentResult.images.length > 1 ? `· Image ${activeImageIndex + 1}` : ""}
+          </Text>
           {generatingHooks && <ActivityIndicator size="small" color={colors.primary} />}
         </View>
         <Text style={[styles.hooksSub, { color: colors.mutedForeground }]}>
           Scroll-stopping captions for {currentResult.platform}
         </Text>
-        {hooks.map((hook, i) => (
+        {(currentResult.images[activeImageIndex]?.hooks ?? []).map((hook, i) => (
           <Pressable
             key={i}
             onPress={() => copyHook(hook.text, i)}
@@ -478,7 +492,7 @@ export default function GenerateScreen() {
             />
           </Pressable>
         ))}
-        {!generatingHooks && hooks.length === 0 && (
+        {!generatingHooks && (currentResult.images[activeImageIndex]?.hooks ?? []).length === 0 && (
           <View style={[styles.emptyHooks, { backgroundColor: colors.card, borderRadius: colors.radius }]}>
             <Text style={[styles.emptyHooksText, { color: colors.mutedForeground }]}>
               Hooks will appear here once generated
