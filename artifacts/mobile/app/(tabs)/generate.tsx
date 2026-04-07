@@ -209,21 +209,20 @@ export default function GenerateScreen() {
         const allConcepts = responses.flatMap((r) => r.videoConcepts ?? []);
 
         setGeneratingHooks(true);
-        const allHooks = await fetchHooksData(
-          creativeVision || "lifestyle product",
-          settings.platform
-        ).catch(() => [] as Hook[]);
+        const perImageHooks = await Promise.all(
+          rawImages.map((_, i) =>
+            fetchHooksData(
+              `${creativeVision || "lifestyle product"} — image ${i + 1} of ${rawImages.length}`,
+              settings.platform
+            ).catch(() => [] as Hook[])
+          )
+        );
         setGeneratingHooks(false);
 
         const allImages: GeneratedImage[] = rawImages.map((img, i) => ({
           b64_json: img.b64_json,
           index: img.index,
-          hooks: allHooks.length > 0
-            ? allHooks.slice(
-                i * Math.ceil(allHooks.length / rawImages.length),
-                (i + 1) * Math.ceil(allHooks.length / rawImages.length)
-              )
-            : [],
+          hooks: perImageHooks[i] ?? [],
         }));
 
         const result: GenerationResult = {
@@ -231,7 +230,7 @@ export default function GenerateScreen() {
           productImageUri: imgUri,
           images: allImages,
           videoConcepts: allConcepts,
-          hooks: allHooks,
+          hooks: perImageHooks.flat(),
           angle: settings.angle,
           lighting: settings.lighting,
           aspectRatio: settings.aspectRatio,

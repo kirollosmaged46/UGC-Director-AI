@@ -227,8 +227,6 @@ components:
       properties:
         title:
           type: string
-      required:
-        - title
     SendOpenaiMessageBody:
       type: object
       properties:

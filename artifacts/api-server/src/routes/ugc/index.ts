@@ -103,15 +103,21 @@ router.post("/generate", async (req, res) => {
 
   try {
     if (contentType === "video_concept") {
-      const videoConcepts = [];
-      for (let i = 0; i < count; i++) {
-        const conceptResponse = await openai.chat.completions.create({
-          model: "gpt-5.2",
-          max_completion_tokens: 600,
-          messages: [
-            {
-              role: "user",
-              content: `You are an expert UGC video director. Create a specific video concept storyboard for a product shoot:
+      const imageBuffer = Buffer.from(imageBase64, "base64");
+      const tmpDir = os.tmpdir();
+      const tmpPath = path.join(tmpDir, `ugc-product-${Date.now()}.png`);
+      writeFileSync(tmpPath, imageBuffer);
+      tmpFiles.push(tmpPath);
+
+      const concepts = await Promise.all(
+        Array.from({ length: count }, async (_, i) => {
+          const conceptResponse = await openai.chat.completions.create({
+            model: "gpt-5.2",
+            max_completion_tokens: 600,
+            messages: [
+              {
+                role: "user",
+                content: `You are an expert UGC video director. Create a specific video concept storyboard for a product shoot:
 
 Camera angle: ${angle}
 Lighting mood: ${lighting}
@@ -122,24 +128,39 @@ Creative vision: ${creativeVision ?? "authentic and genuine, feels like real UGC
 Provide a 3-scene UGC video concept (each ~3-5 seconds). Optimize composition for ${aspectRatio} frame.
 
 Format as valid JSON only: { "title": "short catchy video title max 8 words", "storyboard": "Scene 1: description\\n\\nScene 2: description\\n\\nScene 3: description" }`,
-            },
-          ],
-        });
-
-        const raw = conceptResponse.choices[0]?.message?.content ?? "{}";
-        try {
-          const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
-          const parsedConcept = JSON.parse(cleaned) as { title?: string; storyboard?: string };
-          videoConcepts.push({ ...parsedConcept, index: i });
-        } catch {
-          videoConcepts.push({
-            title: `UGC Video Concept ${i + 1}`,
-            storyboard: raw,
-            index: i,
+              },
+            ],
           });
-        }
-      }
-      res.json({ images: [], videoConcepts });
+
+          const raw = conceptResponse.choices[0]?.message?.content ?? "{}";
+          let concept: { title: string; storyboard: string };
+          try {
+            const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
+            const parsed = JSON.parse(cleaned) as { title?: string; storyboard?: string };
+            concept = {
+              title: parsed.title ?? `UGC Video Concept ${i + 1}`,
+              storyboard: parsed.storyboard ?? raw,
+            };
+          } catch {
+            concept = { title: `UGC Video Concept ${i + 1}`, storyboard: raw };
+          }
+
+          const keyframePrompt =
+            buildUgcPrompt({ angle, lighting, aspectRatio, contentType: "photo", platform, creativeVision }) +
+            ` This is a keyframe still from a UGC video: ${concept.title}.`;
+          const keyframeBuffer = await editImages([tmpPath], keyframePrompt);
+
+          return {
+            concept: { ...concept, index: i },
+            image: { b64_json: keyframeBuffer.toString("base64"), index: i },
+          };
+        })
+      );
+
+      res.json({
+        images: concepts.map((c) => c.image),
+        videoConcepts: concepts.map((c) => c.concept),
+      });
       return;
     }
 
