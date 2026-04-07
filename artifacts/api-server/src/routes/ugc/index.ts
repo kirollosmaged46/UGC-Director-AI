@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { editImages } from "@workspace/integrations-openai-ai-server";
+import { editImages, type ImageEditSize } from "@workspace/integrations-openai-ai-server";
 import { writeFile, unlink } from "fs/promises";
 import path from "path";
 import os from "os";
@@ -27,6 +27,12 @@ const HooksSchema = z.object({
   tone: z.string().max(100).default("authentic"),
   imageContext: z.string().max(2000).optional(),
 });
+
+function aspectRatioToSize(ratio: string): ImageEditSize {
+  if (ratio === "9:16") return "1024x1536";
+  if (ratio === "16:9") return "1536x1024";
+  return "1024x1024";
+}
 
 function buildUgcPrompt(params: {
   angle: string;
@@ -150,7 +156,7 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
           const keyframePrompt =
             buildUgcPrompt({ angle, lighting, aspectRatio, contentType: "photo", platform, creativeVision }) +
             ` This is a keyframe still from a UGC video: ${concept.title}.`;
-          const keyframeBuffer = await editImages([tmpPath], keyframePrompt);
+          const keyframeBuffer = await editImages([tmpPath], keyframePrompt, undefined, aspectRatioToSize(aspectRatio));
 
           return {
             concept: { ...concept, index: i },
@@ -176,7 +182,7 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
 
     const generatedImages = [];
     for (let i = 0; i < count; i++) {
-      const editedBuffer = await editImages([tmpPath], prompt);
+      const editedBuffer = await editImages([tmpPath], prompt, undefined, aspectRatioToSize(aspectRatio));
       generatedImages.push({
         b64_json: editedBuffer.toString("base64"),
         index: i,
@@ -246,7 +252,8 @@ Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${p
       const parsedHooks = JSON.parse(cleaned) as { hooks?: Array<{ text: string; platform: string }> };
       res.json(parsedHooks);
     } catch {
-      res.json({ hooks: [{ text: raw, platform }] });
+      req.log.warn({ raw }, "Failed to parse hooks JSON from model; returning empty list");
+      res.json({ hooks: [] });
     }
   } catch (err) {
     req.log.error({ err }, "Failed to generate hooks");

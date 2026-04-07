@@ -32,10 +32,13 @@ export async function generateImageBuffer(
   return Buffer.from(base64, "base64");
 }
 
+export type ImageEditSize = "1024x1024" | "1024x1536" | "1536x1024";
+
 export async function editImages(
   imageFiles: string[],
   prompt: string,
-  outputPath?: string
+  outputPath?: string,
+  size: ImageEditSize = "1024x1024"
 ): Promise<Buffer> {
   const images = await Promise.all(
     imageFiles.map((file) =>
@@ -45,11 +48,12 @@ export async function editImages(
     )
   );
 
-  const response = await openai.images.edit({
+  const response = (await openai.images.edit({
     model: "gpt-image-1",
     image: images,
     prompt,
-  });
+    size,
+  } as Parameters<typeof openai.images.edit>[0])) as { data?: Array<{ b64_json?: string }> };
 
   const imageBase64 = (response.data ?? [])[0]?.b64_json ?? "";
   const imageBytes = Buffer.from(imageBase64, "base64");
