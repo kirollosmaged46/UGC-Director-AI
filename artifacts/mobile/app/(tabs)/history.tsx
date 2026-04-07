@@ -44,7 +44,7 @@ function ResultCard({ item }: { item: GenerationResult }) {
             { backgroundColor: colors.secondary, borderRadius: colors.radius },
           ]}
         >
-          <MaterialCommunityIcons name="film-outline" size={32} color={colors.primary} />
+          <MaterialCommunityIcons name="video-outline" size={32} color={colors.primary} />
         </View>
       )}
       <View style={styles.cardInfo}>

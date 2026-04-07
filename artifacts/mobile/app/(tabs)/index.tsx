@@ -159,13 +159,15 @@ export default function HomeScreen() {
       )}
 
       <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.featuresRow}>
-        {[
-          { icon: "angle-acute", label: "6 Angles", lib: "MaterialCommunityIcons" },
-          { icon: "lightning-bolt", label: "5 Moods", lib: "MaterialCommunityIcons" },
-          { icon: "brain", label: "AI Director", lib: "MaterialCommunityIcons" },
-        ].map((f) => (
+        {(
+          [
+            { icon: "angle-acute", label: "6 Angles" },
+            { icon: "lightning-bolt", label: "5 Moods" },
+            { icon: "brain", label: "AI Director" },
+          ] as { icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"]; label: string }[]
+        ).map((f) => (
           <View key={f.label} style={[styles.featureChip, { backgroundColor: colors.secondary, borderRadius: colors.radius }]}>
-            <MaterialCommunityIcons name={f.icon as any} size={16} color={colors.primary} />
+            <MaterialCommunityIcons name={f.icon} size={16} color={colors.primary} />
             <Text style={[styles.featureLabel, { color: colors.secondaryForeground }]}>{f.label}</Text>
           </View>
         ))}

@@ -99,35 +99,40 @@ export default function ChatScreen() {
         ...prev,
       ]);
 
+      let sseBuffer = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        sseBuffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const data = JSON.parse(line.slice(6)) as { content?: string; done?: boolean; error?: string };
-            if (data.content) {
-              accumulated += data.content;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === streamingId ? { ...m, content: accumulated } : m
-                )
-              );
+        const events = sseBuffer.split("\n\n");
+        sseBuffer = events.pop() ?? "";
+
+        for (const event of events) {
+          for (const line of event.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const payload = JSON.parse(line.slice(6)) as { content?: string; done?: boolean; error?: string };
+              if (payload.content) {
+                accumulated += payload.content;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === streamingId ? { ...m, content: accumulated } : m
+                  )
+                );
+              }
+              if (payload.done) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === streamingId ? { ...m, streaming: false } : m
+                  )
+                );
+                setCreativeVision(accumulated);
+              }
+            } catch {
+              // skip unparseable lines
             }
-            if (data.done) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === streamingId ? { ...m, streaming: false } : m
-                )
-              );
-              setCreativeVision(accumulated);
-            }
-          } catch {
-            // skip parse errors
           }
         }
       }

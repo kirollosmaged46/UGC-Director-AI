@@ -23,7 +23,10 @@ import {
   type ContentType,
 } from "@/context/UGCContext";
 
-const ANGLES: { id: CameraAngle; label: string; icon: string; desc: string }[] = [
+type MCIcon = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+type IonicIcon = React.ComponentProps<typeof Ionicons>["name"];
+
+const ANGLES: { id: CameraAngle; label: string; icon: IonicIcon; desc: string }[] = [
   { id: "eye-level", label: "Eye Level", icon: "eye-outline", desc: "Natural POV" },
   { id: "overhead", label: "Flat Lay", icon: "arrow-down-circle-outline", desc: "Top down" },
   { id: "low-angle", label: "Low Hero", icon: "arrow-up-outline", desc: "Power shot" },
@@ -47,13 +50,13 @@ const RATIOS: { id: AspectRatio; label: string; ratio: string; desc: string }[] 
   { id: "16:9", label: "16:9", ratio: "16:9", desc: "YouTube" },
 ];
 
-const PLATFORMS: { id: SocialPlatform; label: string; icon: string }[] = [
+const PLATFORMS: { id: SocialPlatform; label: string; icon: IonicIcon }[] = [
   { id: "tiktok", label: "TikTok", icon: "logo-tiktok" },
   { id: "instagram", label: "Instagram", icon: "logo-instagram" },
   { id: "youtube", label: "YouTube", icon: "logo-youtube" },
 ];
 
-const CONTENT_TYPES: { id: ContentType; label: string; icon: string; desc: string }[] = [
+const CONTENT_TYPES: { id: ContentType; label: string; icon: IonicIcon; desc: string }[] = [
   { id: "photo", label: "Photos", icon: "image-outline", desc: "Still images" },
   { id: "video_concept", label: "Video Concept", icon: "film-outline", desc: "Storyboard" },
   { id: "both", label: "Both", icon: "layers-outline", desc: "Photos + Concept" },
@@ -108,9 +111,11 @@ export default function DirectorScreen() {
   }, [productImageUri, triggerGenerate, setCurrentResult]);
 
   const pick = useCallback(
-    <T,>(key: keyof typeof settings, value: T) => {
+    <K extends keyof typeof settings>(key: K, value: typeof settings[K]) => {
       Haptics.selectionAsync();
-      updateSettings({ [key]: value } as any);
+      const partial = {} as Partial<typeof settings>;
+      partial[key] = value;
+      updateSettings(partial);
     },
     [updateSettings]
   );
@@ -141,7 +146,7 @@ export default function DirectorScreen() {
                 style={styles.platformChip}
               >
                 <Ionicons
-                  name={p.icon as any}
+                  name={p.icon}
                   size={18}
                   color={settings.platform === p.id ? colors.primaryForeground : colors.foreground}
                 />
@@ -172,7 +177,7 @@ export default function DirectorScreen() {
                 style={styles.angleChip}
               >
                 <Ionicons
-                  name={a.icon as any}
+                  name={a.icon}
                   size={20}
                   color={settings.angle === a.id ? colors.primaryForeground : colors.primary}
                 />
@@ -311,7 +316,7 @@ export default function DirectorScreen() {
                 style={styles.ctypeChip}
               >
                 <Ionicons
-                  name={ct.icon as any}
+                  name={ct.icon}
                   size={18}
                   color={settings.contentType === ct.id ? colors.primaryForeground : colors.primary}
                 />

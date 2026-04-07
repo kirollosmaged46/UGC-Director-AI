@@ -1,8 +1,17 @@
 import { Router } from "express";
+import { z } from "zod";
 import { db } from "@workspace/db";
 import { conversations, messages } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+
+const CreateConversationSchema = z.object({
+  title: z.string().max(200).optional(),
+});
+
+const SendMessageSchema = z.object({
+  content: z.string().min(1, "content is required").max(4000),
+});
 
 const router = Router();
 
@@ -17,9 +26,14 @@ router.get("/conversations", async (req, res) => {
 });
 
 router.post("/conversations", async (req, res) => {
+  const parsed = CreateConversationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
   try {
-    const { title } = req.body as { title: string };
-    const [conv] = await db.insert(conversations).values({ title }).returning();
+    const { title } = parsed.data;
+    const [conv] = await db.insert(conversations).values({ title: title ?? "Untitled" }).returning();
     res.status(201).json(conv);
   } catch (err) {
     req.log.error({ err }, "Failed to create conversation");
@@ -84,14 +98,24 @@ Based on the conversation, extract a concise creative brief that can guide image
 NEVER use emojis. Be concise and direct.`;
 
 router.post("/conversations/:id/messages", async (req, res) => {
+  const parsed = SendMessageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+
   const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
   try {
-    const { content } = req.body as { content: string };
+    const { content } = parsed.data;
 
     await db.insert(messages).values({
       conversationId: id,

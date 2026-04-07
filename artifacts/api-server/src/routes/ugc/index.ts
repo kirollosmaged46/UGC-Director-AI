@@ -1,11 +1,30 @@
 import { Router } from "express";
+import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { editImages, generateImageBuffer } from "@workspace/integrations-openai-ai-server";
-import { mkdirSync, writeFileSync, unlinkSync } from "fs";
+import { editImages } from "@workspace/integrations-openai-ai-server";
+import { writeFileSync, unlinkSync } from "fs";
 import path from "path";
 import os from "os";
 
 const router = Router();
+
+const GenerateSchema = z.object({
+  imageBase64: z.string().min(1, "imageBase64 is required").max(20_000_000, "image too large"),
+  angle: z.enum(["eye-level", "overhead", "low-angle", "dutch-tilt", "close-up", "wide"]),
+  lighting: z.enum(["golden-hour", "studio-white", "moody-dark", "outdoor-natural", "neon"]),
+  aspectRatio: z.enum(["9:16", "1:1", "4:5", "16:9"]),
+  count: z.number().int().min(1).max(3),
+  contentType: z.enum(["photo", "video_concept"]),
+  platform: z.enum(["tiktok", "instagram", "youtube"]).default("instagram"),
+  creativeVision: z.string().max(2000).optional(),
+});
+
+const HooksSchema = z.object({
+  productDescription: z.string().min(1).max(500),
+  platform: z.enum(["tiktok", "instagram", "youtube"]),
+  tone: z.string().max(100).default("authentic"),
+  imageContext: z.string().max(2000).optional(),
+});
 
 function buildUgcPrompt(params: {
   angle: string;
@@ -34,8 +53,16 @@ function buildUgcPrompt(params: {
     neon: "vibrant neon accent lighting with colorful reflections, nightlife urban aesthetic",
   };
 
-  const angleDesc = angleMap[angle] || angle;
-  const lightingDesc = lightingMap[lighting] || lighting;
+  const ratioMap: Record<string, string> = {
+    "9:16": "vertical portrait 9:16 composition (TikTok/Reels)",
+    "1:1": "square 1:1 composition",
+    "4:5": "portrait 4:5 composition (Instagram feed)",
+    "16:9": "landscape 16:9 composition (YouTube)",
+  };
+
+  const angleDesc = angleMap[angle] ?? angle;
+  const lightingDesc = lightingMap[lighting] ?? lighting;
+  const ratioDesc = ratioMap[aspectRatio] ?? aspectRatio;
 
   const platformContext =
     platform === "tiktok"
@@ -44,7 +71,7 @@ function buildUgcPrompt(params: {
       ? "Instagram-worthy, polished yet authentic lifestyle feel"
       : "YouTube Shorts ready, dynamic thumbnail-quality composition";
 
-  let prompt = `Authentic UGC-style product photo. ${angleDesc}. ${lightingDesc}. ${platformContext}. `;
+  let prompt = `Authentic UGC-style product photo. ${angleDesc}. ${lightingDesc}. Framed for ${ratioDesc}. ${platformContext}. `;
   prompt +=
     "The product should be prominently featured but in a genuine casual setting that feels completely real and unscripted. ";
   prompt +=
@@ -65,32 +92,19 @@ function buildUgcPrompt(params: {
 }
 
 router.post("/generate", async (req, res) => {
+  const parsed = GenerateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+
+  const { imageBase64, angle, lighting, aspectRatio, count, contentType, platform, creativeVision } = parsed.data;
   const tmpFiles: string[] = [];
 
   try {
-    const {
-      imageBase64,
-      angle,
-      lighting,
-      aspectRatio,
-      count,
-      contentType,
-      platform = "instagram",
-      creativeVision,
-    } = req.body as {
-      imageBase64: string;
-      angle: string;
-      lighting: string;
-      aspectRatio: string;
-      count: number;
-      contentType: string;
-      platform?: string;
-      creativeVision?: string;
-    };
-
     if (contentType === "video_concept") {
       const videoConcepts = [];
-      for (let i = 0; i < Math.min(count, 3); i++) {
+      for (let i = 0; i < count; i++) {
         const conceptResponse = await openai.chat.completions.create({
           model: "gpt-5.2",
           max_completion_tokens: 600,
@@ -101,10 +115,11 @@ router.post("/generate", async (req, res) => {
 
 Camera angle: ${angle}
 Lighting mood: ${lighting}
+Aspect ratio: ${aspectRatio}
 Platform: ${platform}
-Creative vision: ${creativeVision || "authentic and genuine, feels like real UGC"}
+Creative vision: ${creativeVision ?? "authentic and genuine, feels like real UGC"}
 
-Provide a 3-scene UGC video concept (each ~3-5 seconds).
+Provide a 3-scene UGC video concept (each ~3-5 seconds). Optimize composition for ${aspectRatio} frame.
 
 Format as valid JSON only: { "title": "short catchy video title max 8 words", "storyboard": "Scene 1: description\\n\\nScene 2: description\\n\\nScene 3: description" }`,
             },
@@ -114,8 +129,8 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
         const raw = conceptResponse.choices[0]?.message?.content ?? "{}";
         try {
           const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
-          const parsed = JSON.parse(cleaned) as { title?: string; storyboard?: string };
-          videoConcepts.push({ ...parsed, index: i });
+          const parsedConcept = JSON.parse(cleaned) as { title?: string; storyboard?: string };
+          videoConcepts.push({ ...parsedConcept, index: i });
         } catch {
           videoConcepts.push({
             title: `UGC Video Concept ${i + 1}`,
@@ -128,14 +143,7 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
       return;
     }
 
-    const prompt = buildUgcPrompt({
-      angle,
-      lighting,
-      aspectRatio,
-      contentType,
-      platform,
-      creativeVision,
-    });
+    const prompt = buildUgcPrompt({ angle, lighting, aspectRatio, contentType, platform, creativeVision });
 
     const imageBuffer = Buffer.from(imageBase64, "base64");
     const tmpDir = os.tmpdir();
@@ -144,11 +152,12 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
     tmpFiles.push(tmpPath);
 
     const generatedImages = [];
-    for (let i = 0; i < Math.min(count, 3); i++) {
+    for (let i = 0; i < count; i++) {
       const editedBuffer = await editImages([tmpPath], prompt);
       generatedImages.push({
         b64_json: editedBuffer.toString("base64"),
         index: i,
+        aspectRatio,
       });
     }
 
@@ -168,19 +177,15 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
 });
 
 router.post("/hooks", async (req, res) => {
-  try {
-    const {
-      productDescription,
-      platform,
-      tone = "authentic",
-      imageContext,
-    } = req.body as {
-      productDescription: string;
-      platform: string;
-      tone?: string;
-      imageContext?: string;
-    };
+  const parsed = HooksSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
 
+  const { productDescription, platform, tone, imageContext } = parsed.data;
+
+  try {
     const platformGuide =
       platform === "tiktok"
         ? "TikTok (punchy hooks, Gen Z voice, 'POV:', 'Tell me why...', 'You need this if...' formats work well)"
@@ -215,8 +220,8 @@ Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${p
     const raw = response.choices[0]?.message?.content ?? '{"hooks":[]}';
     try {
       const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
-      const parsed = JSON.parse(cleaned) as { hooks?: Array<{ text: string; platform: string }> };
-      res.json(parsed);
+      const parsedHooks = JSON.parse(cleaned) as { hooks?: Array<{ text: string; platform: string }> };
+      res.json(parsedHooks);
     } catch {
       res.json({ hooks: [{ text: raw, platform }] });
     }

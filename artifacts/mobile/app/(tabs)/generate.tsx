@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   Pressable,
   Image,
   Platform,
@@ -11,6 +12,8 @@ import {
   Share,
   ActivityIndicator,
   Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
@@ -31,6 +34,18 @@ import { useColors } from "@/hooks/useColors";
 import { useUGC, type GenerationResult } from "@/context/UGCContext";
 
 const { width: SCREEN_W } = Dimensions.get("window");
+const CARD_W = SCREEN_W - 40;
+
+const RATIO_MAP: Record<string, number> = {
+  "9:16": 16 / 9,
+  "1:1": 1,
+  "4:5": 5 / 4,
+  "16:9": 9 / 16,
+};
+
+function imageHeight(aspectRatio: string): number {
+  return CARD_W * (RATIO_MAP[aspectRatio] ?? 1);
+}
 
 async function uriToBase64(uri: string): Promise<string> {
   if (Platform.OS === "web") {
@@ -47,7 +62,7 @@ async function uriToBase64(uri: string): Promise<string> {
     });
   }
   const base64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
+    encoding: 'base64',
   });
   return base64;
 }
@@ -115,6 +130,7 @@ export default function GenerateScreen() {
   const [hooks, setHooks] = useState<Array<{ text: string; platform: string }>>([]);
   const [generatingHooks, setGeneratingHooks] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const isRunning = useRef(false);
 
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
@@ -265,9 +281,9 @@ export default function GenerateScreen() {
         Alert.alert("Permission needed", "Allow media library access to save images.");
         return;
       }
-      const fileUri = `${FileSystem.cacheDirectory}ugc_${Date.now()}.png`;
+      const fileUri = `${FileSystem.Paths.cache.uri}ugc_${Date.now()}.png`;
       await FileSystem.writeAsStringAsync(fileUri, b64, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
       await MediaLibrary.saveToLibraryAsync(fileUri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -326,54 +342,91 @@ export default function GenerateScreen() {
         </Text>
       </Animated.View>
 
-      {currentResult.images.map((img, i) => (
-        <Animated.View
-          key={img.index}
-          entering={FadeIn.delay(i * 150).duration(400)}
-          style={[
-            styles.imageCard,
-            {
-              backgroundColor: colors.card,
-              borderRadius: colors.radius * 1.5,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Image
-            source={{ uri: `data:image/png;base64,${img.b64_json}` }}
-            style={[styles.generatedImage, { borderRadius: colors.radius }]}
-            resizeMode="cover"
+      {currentResult.images.length > 0 && (
+        <Animated.View entering={FadeIn.duration(400)}>
+          <FlatList
+            data={currentResult.images}
+            keyExtractor={(item) => String(item.index)}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / CARD_W);
+              setActiveImageIndex(idx);
+            }}
+            renderItem={({ item }) => (
+              <View
+                style={[
+                  styles.imageCard,
+                  {
+                    width: CARD_W,
+                    backgroundColor: colors.card,
+                    borderRadius: colors.radius * 1.5,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Image
+                  source={{ uri: `data:image/png;base64,${item.b64_json}` }}
+                  style={[
+                    styles.generatedImage,
+                    {
+                      borderRadius: colors.radius,
+                      height: imageHeight(currentResult.aspectRatio),
+                    },
+                  ]}
+                  resizeMode="cover"
+                />
+                <View style={styles.imageActions}>
+                  <Pressable
+                    style={[styles.actionBtn, { backgroundColor: colors.secondary, borderRadius: colors.radius }]}
+                    onPress={() => saveImage(item.b64_json)}
+                  >
+                    <Ionicons name="download-outline" size={18} color={colors.foreground} />
+                    <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Save</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.actionBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+                    onPress={async () => {
+                      if (Platform.OS !== "web") {
+                        try {
+                          const fileUri = `${FileSystem.Paths.cache.uri}ugc_share_${Date.now()}.png`;
+                          await FileSystem.writeAsStringAsync(fileUri, item.b64_json, {
+                            encoding: 'base64',
+                          });
+                          await Share.share({ url: fileUri });
+                        } catch {
+                          // ignore
+                        }
+                      }
+                    }}
+                  >
+                    <Ionicons name="share-outline" size={18} color={colors.primaryForeground} />
+                    <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Share</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
           />
-          <View style={styles.imageActions}>
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.secondary, borderRadius: colors.radius }]}
-              onPress={() => saveImage(img.b64_json)}
-            >
-              <Ionicons name="download-outline" size={18} color={colors.foreground} />
-              <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Save</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
-              onPress={async () => {
-                if (Platform.OS !== "web") {
-                  try {
-                    const fileUri = `${FileSystem.cacheDirectory}ugc_share_${Date.now()}.png`;
-                    await FileSystem.writeAsStringAsync(fileUri, img.b64_json, {
-                      encoding: FileSystem.EncodingType.Base64,
-                    });
-                    await Share.share({ url: fileUri });
-                  } catch {
-                    // ignore
-                  }
-                }
-              }}
-            >
-              <Ionicons name="share-outline" size={18} color={colors.primaryForeground} />
-              <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Share</Text>
-            </Pressable>
-          </View>
+          {currentResult.images.length > 1 && (
+            <View style={styles.paginationDots}>
+              {currentResult.images.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    {
+                      backgroundColor: i === activeImageIndex ? colors.primary : colors.border,
+                      width: i === activeImageIndex ? 18 : 6,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          )}
         </Animated.View>
-      ))}
+      )}
 
       {currentResult.videoConcepts.map((vc, i) => (
         <Animated.View
@@ -389,7 +442,7 @@ export default function GenerateScreen() {
           ]}
         >
           <View style={styles.conceptHeader}>
-            <MaterialCommunityIcons name="film-outline" size={20} color={colors.primary} />
+            <MaterialCommunityIcons name="video-outline" size={20} color={colors.primary} />
             <Text style={[styles.conceptTitle, { color: colors.foreground }]}>{vc.title}</Text>
           </View>
           <Text style={[styles.conceptBody, { color: colors.mutedForeground }]}>{vc.storyboard}</Text>
@@ -474,7 +527,9 @@ const styles = StyleSheet.create({
   dotsRow: { flexDirection: "row", alignItems: "center" },
   generatingHint: { fontSize: 14, fontFamily: "Inter_400Regular" },
   imageCard: { borderWidth: 1, overflow: "hidden" },
-  generatedImage: { width: "100%", height: SCREEN_W * 1.2 },
+  generatedImage: { width: "100%" },
+  paginationDots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, paddingTop: 10 },
+  dot: { height: 6, borderRadius: 3 },
   imageActions: { flexDirection: "row", gap: 10, padding: 12 },
   actionBtn: {
     flex: 1,
