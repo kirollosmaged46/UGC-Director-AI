@@ -14,3 +14,136 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary List all conversations
+ */
+export const ListOpenaiConversationsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListOpenaiConversationsResponse = zod.array(
+  ListOpenaiConversationsResponseItem,
+);
+
+/**
+ * @summary Create a new conversation
+ */
+export const CreateOpenaiConversationBody = zod.object({
+  title: zod.string(),
+});
+
+/**
+ * @summary Get conversation with messages
+ */
+export const GetOpenaiConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetOpenaiConversationResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  createdAt: zod.coerce.date(),
+  messages: zod.array(
+    zod.object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      role: zod.string(),
+      content: zod.string(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Delete a conversation
+ */
+export const DeleteOpenaiConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List messages in a conversation
+ */
+export const ListOpenaiMessagesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListOpenaiMessagesResponseItem = zod.object({
+  id: zod.number(),
+  conversationId: zod.number(),
+  role: zod.string(),
+  content: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListOpenaiMessagesResponse = zod.array(
+  ListOpenaiMessagesResponseItem,
+);
+
+/**
+ * @summary Send a text message and receive a streaming text response
+ */
+export const SendOpenaiMessageParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SendOpenaiMessageBody = zod.object({
+  content: zod.string(),
+});
+
+/**
+ * @summary Generate UGC content from a product image
+ */
+export const GenerateUgcContentBody = zod.object({
+  imageBase64: zod.string().describe("Base64-encoded product image"),
+  angle: zod.string().describe("Camera angle directive"),
+  lighting: zod.string().describe("Lighting mood"),
+  aspectRatio: zod.string().describe("Output aspect ratio"),
+  count: zod.number().describe("Number of images to generate (1-3)"),
+  contentType: zod
+    .string()
+    .describe("Type of content - photo or video_concept"),
+  creativeVision: zod
+    .string()
+    .optional()
+    .describe("Creative director instructions from AI chat"),
+  platform: zod.string().optional().describe("Target social media platform"),
+});
+
+export const GenerateUgcContentResponse = zod.object({
+  images: zod.array(
+    zod.object({
+      b64_json: zod.string(),
+      index: zod.number(),
+    }),
+  ),
+  videoConcepts: zod
+    .array(
+      zod.object({
+        title: zod.string(),
+        storyboard: zod.string(),
+        index: zod.number(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Generate social media hooks and captions
+ */
+export const GenerateUgcHooksBody = zod.object({
+  productDescription: zod.string(),
+  platform: zod.string(),
+  tone: zod.string().optional(),
+  imageContext: zod.string().optional(),
+});
+
+export const GenerateUgcHooksResponse = zod.object({
+  hooks: zod.array(
+    zod.object({
+      text: zod.string(),
+      platform: zod.string(),
+    }),
+  ),
+});

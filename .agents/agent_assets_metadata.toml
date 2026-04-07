@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "9Y6mf2k4DAvhzQwTLfK-i"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "ugc creator app icon"
