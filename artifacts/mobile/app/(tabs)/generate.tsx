@@ -328,6 +328,7 @@ export default function GenerateScreen() {
   const [allAnglesResults, setAllAnglesResults] = useState<AngleResult[] | null>(null);
   const [activeAngleTab, setActiveAngleTab] = useState(0);
   const [isAllAnglesLoading, setIsAllAnglesLoading] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const isRunning = useRef(false);
 
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
@@ -464,16 +465,8 @@ export default function GenerateScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : "Unknown error occurred";
-        Alert.alert("Generation Failed", errMsg, [
-          {
-            text: "Retry",
-            onPress: () => {
-              isRunning.current = false;
-              if (productImageUri) void runGeneration(productImageUri);
-            },
-          },
-          { text: "Dismiss" },
-        ]);
+        console.error("[generate] runGeneration failed:", err);
+        setGenerationError(errMsg);
       } finally {
         setIsLoading(false);
         setGeneratingPhase(undefined);
@@ -531,7 +524,9 @@ export default function GenerateScreen() {
         const results = await Promise.all(angleRequests);
         setAllAnglesResults(results);
       } catch (err) {
-        Alert.alert("Error", err instanceof Error ? err.message : "Generation failed");
+        const errMsg = err instanceof Error ? err.message : "Generation failed";
+        console.error("[generate] runGenerateAllAngles failed:", err);
+        setGenerationError(errMsg);
       } finally {
         setIsLoading(false);
         setIsAllAnglesLoading(false);
@@ -547,12 +542,16 @@ export default function GenerateScreen() {
     if (generateTrigger > 0 && productImageUri) {
       setAllAnglesResults(null);
       setCurrentResult(null);
+      setGenerationError(null);
+      isRunning.current = false;
       void runGeneration(productImageUri);
     }
   }, [generateTrigger]);
 
   useEffect(() => {
     if (generateAllAnglesTrigger > 0 && productImageUri) {
+      setGenerationError(null);
+      isRunning.current = false;
       void runGenerateAllAngles(productImageUri);
     }
   }, [generateAllAnglesTrigger]);
@@ -730,6 +729,15 @@ export default function GenerateScreen() {
   if (!currentResult) {
     return (
       <View style={[styles.container, styles.emptyState, { backgroundColor: colors.background }]}>
+        {generationError && (
+          <View style={[styles.errorBanner, { backgroundColor: colors.destructive ?? "#ef4444" }]}>
+            <Ionicons name="alert-circle-outline" size={16} color="#fff" />
+            <Text style={styles.errorBannerText}>{generationError}</Text>
+            <Pressable onPress={() => setGenerationError(null)}>
+              <Ionicons name="close" size={16} color="#fff" />
+            </Pressable>
+          </View>
+        )}
         <MaterialCommunityIcons name="creation" size={48} color={colors.mutedForeground} />
         <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Nothing generated yet</Text>
         {productImageUri ? (
@@ -749,6 +757,7 @@ export default function GenerateScreen() {
                 style={[styles.emptyPrimaryBtn, { flex: 1, backgroundColor: colors.primary, borderRadius: colors.radius }]}
                 onPress={() => {
                   setCurrentResult(null);
+                  setGenerationError(null);
                   triggerGenerate();
                 }}
               >
@@ -1107,4 +1116,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   angleTabText: { fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignSelf: "stretch",
+  },
+  errorBannerText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", color: "#fff" },
 });
