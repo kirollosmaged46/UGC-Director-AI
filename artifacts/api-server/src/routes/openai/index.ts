@@ -11,7 +11,7 @@ const CreateConversationSchema = z.object({
 
 const SendMessageSchema = z.object({
   content: z.string().min(1, "content is required").max(4000),
-  referenceImageBase64: z.string().max(10_000_000).optional(),
+  referenceImageBase64: z.string().max(40_000_000).optional(),
   referenceImageMime: z.string().max(50).optional(),
 });
 

@@ -49,18 +49,35 @@ function imageHeight(aspectRatio: string): number {
   return CARD_W * (RATIO_MAP[aspectRatio] ?? 1);
 }
 
+const MAX_DIM = 1280;
+const JPEG_QUALITY = 0.85;
+
 async function uriToBase64(uri: string): Promise<string> {
   if (Platform.OS === "web") {
     const response = await fetch(uri);
     const blob = await response.blob();
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result.split(",")[1] ?? "");
+      const img = new Image();
+      const objUrl = URL.createObjectURL(blob);
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl);
+        let { width, height } = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          const scale = MAX_DIM / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas")); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+        resolve(dataUrl.split(",")[1] ?? "");
       };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+      img.onerror = reject;
+      img.src = objUrl;
     });
   }
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
@@ -163,7 +180,13 @@ function VideoCard({
 
   const saveVideo = useCallback(async () => {
     if (Platform.OS === "web") {
-      Alert.alert("Info", "Saving is not supported in web preview.");
+      const a = document.createElement("a");
+      a.href = videoUrl;
+      a.download = `ugc_video_${Date.now()}.mp4`;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       return;
     }
     setSaving(true);
@@ -187,7 +210,11 @@ function VideoCard({
 
   const shareVideo = useCallback(async () => {
     if (Platform.OS === "web") {
-      Alert.alert("Info", "Sharing is not supported in web preview.");
+      if (navigator.share) {
+        try { await navigator.share({ url: videoUrl, title: "UGC Video" }); } catch { /* ignore */ }
+      } else {
+        window.open(videoUrl, "_blank");
+      }
       return;
     }
     try {
@@ -529,7 +556,12 @@ export default function GenerateScreen() {
 
   const saveImage = useCallback(async (b64: string) => {
     if (Platform.OS === "web") {
-      Alert.alert("Info", "Saving is not supported in web preview. Use the share option.");
+      const a = document.createElement("a");
+      a.href = `data:image/png;base64,${b64}`;
+      a.download = `ugc_image_${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       return;
     }
     try {
@@ -546,6 +578,21 @@ export default function GenerateScreen() {
     } catch {
       Alert.alert("Error", "Could not save image.");
     }
+  }, []);
+
+  const shareImage = useCallback(async (b64: string) => {
+    if (Platform.OS === "web") {
+      const blob = await (await fetch(`data:image/png;base64,${b64}`)).blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      return;
+    }
+    try {
+      const fileUri = `${FileSystem.cacheDirectory ?? ""}ugc_share_${Date.now()}.png`;
+      await FileSystem.writeAsStringAsync(fileUri, b64, { encoding: "base64" });
+      await Share.share({ url: fileUri });
+    } catch { /* ignore */ }
   }, []);
 
   const copyHook = useCallback(async (text: string, index: number) => {
@@ -648,15 +695,7 @@ export default function GenerateScreen() {
                     </Pressable>
                     <Pressable
                       style={[styles.actionBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
-                      onPress={async () => {
-                        if (Platform.OS !== "web") {
-                          try {
-                            const fileUri = `${FileSystem.cacheDirectory ?? ""}ugc_share_${Date.now()}.png`;
-                            await FileSystem.writeAsStringAsync(fileUri, item.b64_json, { encoding: "base64" });
-                            await Share.share({ url: fileUri });
-                          } catch { /* ignore */ }
-                        }
-                      }}
+                      onPress={() => void shareImage(item.b64_json)}
                     >
                       <Ionicons name="share-outline" size={18} color={colors.primaryForeground} />
                       <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Share</Text>
@@ -777,19 +816,7 @@ export default function GenerateScreen() {
                       styles.actionBtn,
                       { backgroundColor: colors.primary, borderRadius: colors.radius },
                     ]}
-                    onPress={async () => {
-                      if (Platform.OS !== "web") {
-                        try {
-                          const fileUri = `${FileSystem.cacheDirectory ?? ""}ugc_share_${Date.now()}.png`;
-                          await FileSystem.writeAsStringAsync(fileUri, item.b64_json, {
-                            encoding: "base64",
-                          });
-                          await Share.share({ url: fileUri });
-                        } catch {
-                          // ignore
-                        }
-                      }
-                    }}
+                    onPress={() => void shareImage(item.b64_json)}
                   >
                     <Ionicons name="share-outline" size={18} color={colors.primaryForeground} />
                     <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>

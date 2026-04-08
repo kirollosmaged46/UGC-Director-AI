@@ -34,19 +34,36 @@ interface ChatMessage {
 
 const SYSTEM_INTRO = "I'm your AI creative director. Tell me about your product — what it is, who it's for, and the vibe you're going for. You can also share a reference image or UGC you love, and I'll extract the style for you.";
 
+const MAX_DIM = 1280;
+const JPEG_QUALITY = 0.82;
+
 async function uriToBase64(uri: string): Promise<{ b64: string; mime: string }> {
   if (Platform.OS === "web") {
     const response = await fetch(uri);
     const blob = await response.blob();
-    const mime = blob.type || "image/jpeg";
+    const mime = "image/jpeg";
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve({ b64: result.split(",")[1] ?? "", mime });
+      const img = new Image();
+      const objUrl = URL.createObjectURL(blob);
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl);
+        let { width, height } = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          const scale = MAX_DIM / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas")); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+        resolve({ b64: dataUrl.split(",")[1] ?? "", mime });
       };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+      img.onerror = reject;
+      img.src = objUrl;
     });
   }
   const lowerUri = uri.toLowerCase();
