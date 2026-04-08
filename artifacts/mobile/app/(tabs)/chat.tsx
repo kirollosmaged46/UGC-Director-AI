@@ -85,7 +85,7 @@ export default function ChatScreen() {
     return data.id;
   }, [baseUrl]);
 
-  const pickReference = useCallback(async () => {
+  const pickMedia = useCallback(async (mediaTypes: ImagePicker.MediaType[]) => {
     try {
       setIsPickingRef(true);
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -94,7 +94,7 @@ export default function ChatScreen() {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images", "videos"],
+        mediaTypes,
         quality: 0.8,
         allowsEditing: false,
         videoMaxDuration: 120,
@@ -122,6 +122,28 @@ export default function ChatScreen() {
       setIsPickingRef(false);
     }
   }, []);
+
+  const pickReference = useCallback(() => {
+    Alert.alert(
+      "Add Reference",
+      "Choose what type of reference to attach",
+      [
+        {
+          text: "Photo",
+          onPress: () => pickMedia(["images"]),
+        },
+        {
+          text: "Video",
+          onPress: () => pickMedia(["videos"]),
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ],
+      { cancelable: true }
+    );
+  }, [pickMedia]);
 
   const clearReference = useCallback(() => {
     setReferenceUri(null);
@@ -367,11 +389,18 @@ export default function ChatScreen() {
             {isPickingRef ? (
               <ActivityIndicator size="small" color={colors.mutedForeground} />
             ) : (
-              <Ionicons
-                name={referenceIsVideo ? "videocam" : referenceUri ? "image" : "image-outline"}
-                size={22}
-                color={referenceUri ? colors.primary : colors.mutedForeground}
-              />
+              <View style={styles.attachBtnInner}>
+                <Ionicons
+                  name={referenceIsVideo ? "videocam" : referenceUri ? "image" : "attach-outline"}
+                  size={22}
+                  color={referenceUri ? colors.primary : colors.mutedForeground}
+                />
+                {!referenceUri && (
+                  <Text style={[styles.attachHint, { color: colors.mutedForeground }]}>
+                    Photo{"\n"}/ Video
+                  </Text>
+                )}
+              </View>
             )}
           </Pressable>
           <TextInput
@@ -472,10 +501,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   attachBtn: {
-    width: 36,
+    width: 46,
     height: 36,
     alignItems: "center",
     justifyContent: "center",
+  },
+  attachBtnInner: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+  },
+  attachHint: {
+    fontSize: 7,
+    fontFamily: "Inter_500Medium",
+    textAlign: "center",
+    lineHeight: 9,
   },
   input: {
     flex: 1,

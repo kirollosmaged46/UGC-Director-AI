@@ -226,10 +226,6 @@ importers:
         version: 4.21.0
 
   artifacts/mobile:
-    dependencies:
-      expo-video-thumbnails:
-        specifier: ^10.0.8
-        version: 10.0.8(expo@54.0.33)
     devDependencies:
       '@babel/core':
         specifier: ^7.25.2
@@ -330,6 +326,9 @@ importers:
       expo-video:
         specifier: ~3.0.16
         version: 3.0.16(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      expo-video-thumbnails:
+        specifier: ^10.0.8
+        version: 10.0.8(expo@54.0.33)
       expo-web-browser:
         specifier: ~15.0.10
         version: 15.0.10(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))
