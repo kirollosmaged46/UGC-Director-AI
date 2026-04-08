@@ -87,6 +87,13 @@ async function editProductImage(
   return Buffer.from(b64, "base64");
 }
 
+// Ken Burns zoom directions — safe values that stay within frame bounds
+const ZOOM_DIRECTIONS = [
+  `z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,  // center zoom in
+  `z='min(zoom+0.0015,1.2)':x='0':y='0'`,                                  // top-left anchor
+  `z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='0'`,                  // top-center anchor
+];
+
 async function buildVideoFromKeyframes(
   keyframePaths: string[],
   outputPath: string,
@@ -97,60 +104,51 @@ async function buildVideoFromKeyframes(
   const fps = 24;
   const n = keyframePaths.length;
   const clipDur = parseFloat((totalDuration / n).toFixed(2));
-  const fadeDur = Math.min(0.5, clipDur * 0.1);
   const d = Math.round(fps * clipDur);
+  const tmpDir = path.dirname(outputPath);
+  const clipPaths: string[] = [];
 
-  const inputs: string[] = [];
-  for (const kf of keyframePaths) {
-    inputs.push("-framerate", String(fps), "-loop", "1", "-t", String(clipDur + 1), "-i", kf);
+  // Pass 1: encode each keyframe as its own constant-fps clip
+  for (let i = 0; i < n; i++) {
+    const clipPath = path.join(tmpDir, `ugc-clip-${i}-${randomUUID()}.mp4`);
+    const zoomDir = ZOOM_DIRECTIONS[i % ZOOM_DIRECTIONS.length];
+    await execFileAsync("ffmpeg", [
+      "-framerate", String(fps),
+      "-loop", "1",
+      "-t", String(clipDur),
+      "-i", keyframePaths[i],
+      "-vf", `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},zoompan=${zoomDir}:d=${d}:s=${w}x${h}:fps=${fps},fps=${fps}`,
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      "-preset", "ultrafast",
+      "-r", String(fps),
+      "-y",
+      clipPath,
+    ]);
+    clipPaths.push(clipPath);
   }
 
-  const zoomDirections = [
-    `z='min(zoom+0.0015,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
-    `z='min(zoom+0.0015,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
-    `z='min(zoom+0.0015,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
-  ];
+  // Pass 2: concat all clips into the final output
+  const concatList = clipPaths.map((p) => `file '${p}'`).join("\n");
+  const concatFile = path.join(tmpDir, `ugc-concat-${randomUUID()}.txt`);
+  await writeFile(concatFile, concatList);
 
-  const zpFilters = keyframePaths.map((_, i) =>
-    `[${i}:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},zoompan=${zoomDirections[i] ?? zoomDirections[0]}:d=${d}:s=${w}x${h}:fps=${fps},setpts=PTS-STARTPTS[v${i}]`
-  );
-
-  let filterComplex: string;
-  let mapLabel: string;
-
-  if (n === 1) {
-    filterComplex = zpFilters[0];
-    mapLabel = "[v0]";
-  } else if (n === 2) {
-    const offset1 = clipDur - fadeDur;
-    filterComplex = [
-      zpFilters[0],
-      zpFilters[1],
-      `[v0][v1]xfade=transition=fade:duration=${fadeDur}:offset=${offset1}[vout]`,
-    ].join(";");
-    mapLabel = "[vout]";
-  } else {
-    const offset1 = clipDur - fadeDur;
-    const offset2 = 2 * clipDur - 2 * fadeDur;
-    filterComplex = [
-      ...zpFilters,
-      `[v0][v1]xfade=transition=fade:duration=${fadeDur}:offset=${offset1}[x1]`,
-      `[x1][v2]xfade=transition=fade:duration=${fadeDur}:offset=${offset2}[vout]`,
-    ].join(";");
-    mapLabel = "[vout]";
+  try {
+    await execFileAsync("ffmpeg", [
+      "-f", "concat",
+      "-safe", "0",
+      "-i", concatFile,
+      "-c", "copy",
+      "-movflags", "+faststart",
+      "-y",
+      outputPath,
+    ]);
+  } finally {
+    // Clean up intermediate clips and concat file
+    for (const p of [...clipPaths, concatFile]) {
+      try { await unlink(p); } catch { /* ignore */ }
+    }
   }
-
-  await execFileAsync("ffmpeg", [
-    ...inputs,
-    "-filter_complex", filterComplex,
-    "-map", mapLabel,
-    "-c:v", "libx264",
-    "-pix_fmt", "yuv420p",
-    "-preset", "ultrafast",
-    "-movflags", "+faststart",
-    "-y",
-    outputPath,
-  ]);
 }
 
 router.post("/generate", async (req, res) => {
