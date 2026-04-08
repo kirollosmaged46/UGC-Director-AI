@@ -58,7 +58,7 @@ async function uriToBase64(uri: string): Promise<string> {
     const response = await fetch(uri);
     const blob = await response.blob();
     return new Promise((resolve, reject) => {
-      const img = new Image();
+      const img = new window.Image();
       const objUrl = URL.createObjectURL(blob);
       img.onload = () => {
         URL.revokeObjectURL(objUrl);
