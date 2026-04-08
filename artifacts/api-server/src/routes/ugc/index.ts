@@ -39,7 +39,7 @@ const ModelHooksResponseSchema = z.object({ hooks: z.array(ModelHookSchema) });
 
 const ModelConceptSchema = z.object({
   title: z.string().min(1),
-  scenes: z.array(z.object({ description: z.string().min(1) })).min(1).max(3),
+  scenes: z.array(z.object({ description: z.string().min(1) })).length(3),
 });
 
 function aspectRatioToSize(ratio: string): ImageEditSize {
