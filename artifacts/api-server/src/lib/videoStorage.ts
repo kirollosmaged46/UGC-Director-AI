@@ -28,9 +28,13 @@ function buildGcsClient(): Storage {
   return new Storage({ keyFilename: credPath, projectId: "" });
 }
 
+export interface IVideoStorage {
+  uploadVideoAndGetUrl(localPath: string): Promise<string>;
+}
+
 const gcs = buildGcsClient();
 
-export async function uploadVideoAndGetUrl(localPath: string): Promise<string> {
+async function uploadVideoAndGetUrl(localPath: string): Promise<string> {
   const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
   if (!bucketId) {
     throw new Error("DEFAULT_OBJECT_STORAGE_BUCKET_ID not set — run object storage setup");
@@ -66,3 +70,5 @@ export async function uploadVideoAndGetUrl(localPath: string): Promise<string> {
   const { signed_url: signedUrl } = (await response.json()) as { signed_url: string };
   return signedUrl;
 }
+
+export const videoStorage: IVideoStorage = { uploadVideoAndGetUrl };

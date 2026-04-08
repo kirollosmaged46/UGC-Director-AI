@@ -14,10 +14,13 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
 import { useUGC, type GenerationResult } from "@/context/UGCContext";
 
+const VIDEO_URL_TTL_MS = 24 * 60 * 60 * 1000;
+
 function ResultCard({ item }: { item: GenerationResult }) {
   const colors = useColors();
   const firstImage = item.images[0];
   const hasVideo = !!item.videoUrl;
+  const videoExpired = hasVideo && Date.now() - item.createdAt > VIDEO_URL_TTL_MS;
 
   return (
     <Animated.View
@@ -64,7 +67,7 @@ function ResultCard({ item }: { item: GenerationResult }) {
           {hasVideo ? " + 1 video" : ""}
           {" · "}
           {new Date(item.createdAt).toLocaleDateString()}
-          {hasVideo ? " · video link 24h" : ""}
+          {videoExpired ? " · video expired" : hasVideo ? " · video 24h" : ""}
         </Text>
       </View>
     </Animated.View>

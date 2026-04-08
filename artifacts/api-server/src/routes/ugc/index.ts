@@ -8,7 +8,7 @@ import { writeFile, unlink } from "fs/promises";
 import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
-import { uploadVideoAndGetUrl } from "../../lib/videoStorage";
+import { videoStorage } from "../../lib/videoStorage";
 import { AD_ANGLE_ENUM, type AdAngle, ModelConceptSchema, buildUgcPrompt } from "./helpers.js";
 
 const execFileAsync = promisify(execFile);
@@ -210,7 +210,7 @@ Return ONLY valid JSON:
 
       await buildVideoFromKeyframes(keyframePaths, videoPath, aspectRatio);
 
-      const videoUrl = await uploadVideoAndGetUrl(videoPath);
+      const videoUrl = await videoStorage.uploadVideoAndGetUrl(videoPath);
 
       res.json({ images: [], videoUrl });
       return;
