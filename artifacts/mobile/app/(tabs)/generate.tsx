@@ -425,8 +425,9 @@ export default function GenerateScreen() {
         setCurrentResult(result);
         addToHistory(result);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {
-        Alert.alert("Generation Failed", "Something went wrong. Please try again.", [
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : "Unknown error occurred";
+        Alert.alert("Generation Failed", errMsg, [
           {
             text: "Retry",
             onPress: () => {

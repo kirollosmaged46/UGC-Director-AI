@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   FlatList,
+  Image,
   StyleSheet,
   Pressable,
   Platform,
@@ -12,6 +13,8 @@ import {
 } from "react-native";
 import { fetch } from "expo/fetch";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -23,10 +26,32 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  referenceUri?: string;
   streaming?: boolean;
 }
 
-const SYSTEM_INTRO = "I'm your AI creative director. Tell me about your product — what it is, who it's for, and the vibe you're going for. I'll help shape the perfect generation prompt for authentic UGC content.";
+const SYSTEM_INTRO = "I'm your AI creative director. Tell me about your product — what it is, who it's for, and the vibe you're going for. You can also share a reference image or UGC you love, and I'll extract the style for you.";
+
+async function uriToBase64(uri: string): Promise<{ b64: string; mime: string }> {
+  if (Platform.OS === "web") {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const mime = blob.type || "image/jpeg";
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve({ b64: result.split(",")[1] ?? "", mime });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+  const lowerUri = uri.toLowerCase();
+  const mime = lowerUri.endsWith(".png") ? "image/png" : lowerUri.endsWith(".webp") ? "image/webp" : "image/jpeg";
+  const b64 = await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
+  return { b64, mime };
+}
 
 export default function ChatScreen() {
   const colors = useColors();
@@ -41,6 +66,8 @@ export default function ChatScreen() {
   ]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [referenceUri, setReferenceUri] = useState<string | null>(null);
+  const [isPickingRef, setIsPickingRef] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -54,11 +81,42 @@ export default function ChatScreen() {
     return data.id;
   }, [baseUrl]);
 
+  const pickReference = useCallback(async () => {
+    try {
+      setIsPickingRef(true);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Allow photo library access to share a reference.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: "images",
+        quality: 0.8,
+        allowsEditing: false,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setReferenceUri(result.assets[0].uri);
+        Haptics.selectionAsync();
+      }
+    } catch {
+      Alert.alert("Error", "Could not pick reference image.");
+    } finally {
+      setIsPickingRef(false);
+    }
+  }, []);
+
+  const clearReference = useCallback(() => {
+    setReferenceUri(null);
+    Haptics.selectionAsync();
+  }, []);
+
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isSending) return;
 
     const userText = input.trim();
+    const sendRef = referenceUri;
     setInput("");
+    setReferenceUri(null);
     setIsSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -66,6 +124,7 @@ export default function ChatScreen() {
       id: Date.now().toString() + "u",
       role: "user",
       content: userText,
+      referenceUri: sendRef ?? undefined,
     };
     setMessages((prev) => [userMsg, ...prev]);
 
@@ -76,13 +135,29 @@ export default function ChatScreen() {
         setConversationId(convId);
       }
 
+      let refB64: string | undefined;
+      let refMime: string | undefined;
+      if (sendRef) {
+        try {
+          const { b64, mime } = await uriToBase64(sendRef);
+          refB64 = b64;
+          refMime = mime;
+        } catch {
+          refB64 = undefined;
+        }
+      }
+
       const streamingId = Date.now().toString() + "a";
       let accumulated = "";
 
       const response = await fetch(`${baseUrl}/api/openai/conversations/${convId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: userText }),
+        body: JSON.stringify({
+          content: userText,
+          referenceImageBase64: refB64,
+          referenceImageMime: refMime,
+        }),
       });
 
       if (!response.body) throw new Error("No stream");
@@ -132,13 +207,13 @@ export default function ChatScreen() {
           }
         }
       }
-    } catch (err) {
+    } catch {
       Alert.alert("Error", "Failed to get response. Please try again.");
     } finally {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [input, isSending, conversationId, createConversation, setConversationId, setCreativeVision, baseUrl]);
+  }, [input, isSending, referenceUri, conversationId, createConversation, setConversationId, setCreativeVision, baseUrl]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -151,26 +226,35 @@ export default function ChatScreen() {
             <Ionicons name="flash" size={12} color="#fff" />
           </View>
         )}
-        <View
-          style={[
-            styles.bubble,
-            {
-              backgroundColor: isUser ? colors.primary : colors.card,
-              borderRadius: colors.radius,
-              borderBottomRightRadius: isUser ? 4 : colors.radius,
-              borderBottomLeftRadius: isUser ? colors.radius : 4,
-            },
-          ]}
-        >
-          <Text
+        <View style={[styles.msgColumn, isUser ? styles.msgColumnUser : styles.msgColumnAi]}>
+          {item.referenceUri && (
+            <Image
+              source={{ uri: item.referenceUri }}
+              style={[styles.referenceThumb, { borderRadius: colors.radius }]}
+              resizeMode="cover"
+            />
+          )}
+          <View
             style={[
-              styles.bubbleText,
-              { color: isUser ? colors.primaryForeground : colors.foreground },
+              styles.bubble,
+              {
+                backgroundColor: isUser ? colors.primary : colors.card,
+                borderRadius: colors.radius,
+                borderBottomRightRadius: isUser ? 4 : colors.radius,
+                borderBottomLeftRadius: isUser ? colors.radius : 4,
+              },
             ]}
           >
-            {item.content}
-            {item.streaming && <Text style={{ color: colors.primary }}>▊</Text>}
-          </Text>
+            <Text
+              style={[
+                styles.bubbleText,
+                { color: isUser ? colors.primaryForeground : colors.foreground },
+              ]}
+            >
+              {item.content}
+              {item.streaming && <Text style={{ color: colors.primary }}>▊</Text>}
+            </Text>
+          </View>
         </View>
       </Animated.View>
     );
@@ -185,7 +269,7 @@ export default function ChatScreen() {
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Director AI</Text>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-          Describe your vision
+          Describe your vision or share a reference
         </Text>
       </View>
 
@@ -211,6 +295,23 @@ export default function ChatScreen() {
           },
         ]}
       >
+        {referenceUri && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.refPreviewRow}>
+            <Image
+              source={{ uri: referenceUri }}
+              style={[styles.refPreview, { borderRadius: colors.radius }]}
+              resizeMode="cover"
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.refPreviewLabel, { color: colors.foreground }]}>Reference attached</Text>
+              <Text style={[styles.refPreviewSub, { color: colors.mutedForeground }]}>AI will analyze this image</Text>
+            </View>
+            <Pressable onPress={clearReference} hitSlop={8}>
+              <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
+            </Pressable>
+          </Animated.View>
+        )}
+
         <View
           style={[
             styles.inputRow,
@@ -221,6 +322,22 @@ export default function ChatScreen() {
             },
           ]}
         >
+          <Pressable
+            onPress={pickReference}
+            disabled={isPickingRef || isSending}
+            style={[styles.attachBtn, { opacity: isPickingRef ? 0.5 : 1 }]}
+            hitSlop={8}
+          >
+            {isPickingRef ? (
+              <ActivityIndicator size="small" color={colors.mutedForeground} />
+            ) : (
+              <Ionicons
+                name={referenceUri ? "image" : "image-outline"}
+                size={22}
+                color={referenceUri ? colors.primary : colors.mutedForeground}
+              />
+            )}
+          </Pressable>
           <TextInput
             ref={inputRef}
             style={[styles.input, { color: colors.foreground }]}
@@ -270,6 +387,9 @@ const styles = StyleSheet.create({
   msgRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   userRow: { justifyContent: "flex-end" },
   aiRow: { justifyContent: "flex-start" },
+  msgColumn: { gap: 4, maxWidth: "80%" },
+  msgColumnUser: { alignItems: "flex-end" },
+  msgColumnAi: { alignItems: "flex-start" },
   avatar: {
     width: 24,
     height: 24,
@@ -278,17 +398,38 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 2,
   },
-  bubble: { maxWidth: "80%", paddingHorizontal: 14, paddingVertical: 10 },
+  referenceThumb: {
+    width: 160,
+    height: 120,
+  },
+  bubble: { paddingHorizontal: 14, paddingVertical: 10 },
   bubbleText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
-  inputArea: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 },
+  inputArea: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1, gap: 8 },
+  refPreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  refPreview: {
+    width: 48,
+    height: 48,
+  },
+  refPreviewLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  refPreviewSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     borderWidth: 1.5,
-    paddingLeft: 14,
+    paddingLeft: 6,
     paddingRight: 6,
     paddingVertical: 6,
     gap: 6,
+  },
+  attachBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
   },
   input: {
     flex: 1,

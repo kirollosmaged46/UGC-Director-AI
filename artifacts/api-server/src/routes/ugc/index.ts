@@ -2,9 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { openai } from "@workspace/integrations-openai-ai-server";
-import { editImages, type ImageEditSize } from "@workspace/integrations-openai-ai-server";
+import { openai, toFile, type ImageEditSize } from "@workspace/integrations-openai-ai-server";
 import { writeFile, unlink } from "fs/promises";
+import { createReadStream } from "fs";
 import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
@@ -46,6 +46,29 @@ function ffmpegDimensions(ratio: string): { w: number; h: number } {
   if (ratio === "9:16" || ratio === "4:5") return { w: 1024, h: 1536 };
   if (ratio === "16:9") return { w: 1536, h: 1024 };
   return { w: 1024, h: 1024 };
+}
+
+function detectImageMime(buf: Buffer): { mimeType: string; ext: string } {
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) return { mimeType: "image/jpeg", ext: "jpg" };
+  if (buf.length >= 4 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46) return { mimeType: "image/webp", ext: "webp" };
+  return { mimeType: "image/png", ext: "png" };
+}
+
+async function editProductImage(
+  imagePath: string,
+  mimeType: string,
+  prompt: string,
+  size: ImageEditSize = "1024x1024"
+): Promise<Buffer> {
+  const fileObj = await toFile(createReadStream(imagePath), `product.${mimeType.split("/")[1]}`, { type: mimeType });
+  const response = (await openai.images.edit({
+    model: "gpt-image-1",
+    image: fileObj,
+    prompt,
+    size,
+  } as Parameters<typeof openai.images.edit>[0])) as { data?: Array<{ b64_json?: string }> };
+  const b64 = (response.data ?? [])[0]?.b64_json ?? "";
+  return Buffer.from(b64, "base64");
 }
 
 async function buildVideoFromKeyframes(
@@ -126,8 +149,9 @@ router.post("/generate", async (req, res) => {
 
   try {
     const imageBuffer = Buffer.from(imageBase64, "base64");
+    const { mimeType, ext } = detectImageMime(imageBuffer);
     const tmpDir = os.tmpdir();
-    const productPath = path.join(tmpDir, `ugc-product-${randomUUID()}.png`);
+    const productPath = path.join(tmpDir, `ugc-product-${randomUUID()}.${ext}`);
     await writeFile(productPath, imageBuffer);
     tmpFiles.push(productPath);
 
@@ -193,7 +217,7 @@ Return ONLY valid JSON:
               creativeVision,
               sceneContext: scene.description,
             });
-            const buf = await editImages([productPath], scenePrompt, undefined, aspectRatioToSize(aspectRatio));
+            const buf = await editProductImage(productPath, mimeType, scenePrompt, aspectRatioToSize(aspectRatio));
             const kfPath = path.join(tmpDir, `ugc-kf-${randomUUID()}.png`);
             await writeFile(kfPath, buf);
             tmpFiles.push(kfPath);
@@ -219,7 +243,7 @@ Return ONLY valid JSON:
     const generatedImages = [];
     for (let i = 0; i < count; i++) {
       const prompt = buildUgcPrompt({ angle, lighting, aspectRatio, platform, creativeVision });
-      const editedBuffer = await editImages([productPath], prompt, undefined, aspectRatioToSize(aspectRatio));
+      const editedBuffer = await editProductImage(productPath, mimeType, prompt, aspectRatioToSize(aspectRatio));
       generatedImages.push({
         b64_json: editedBuffer.toString("base64"),
         index: i,

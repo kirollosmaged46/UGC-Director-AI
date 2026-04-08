@@ -11,6 +11,8 @@ const CreateConversationSchema = z.object({
 
 const SendMessageSchema = z.object({
   content: z.string().min(1, "content is required").max(4000),
+  referenceImageBase64: z.string().max(10_000_000).optional(),
+  referenceImageMime: z.string().max(50).optional(),
 });
 
 const router = Router();
@@ -105,6 +107,13 @@ When the user describes their product or vision, ask insightful questions about:
 - What emotions the content should evoke
 - Specific details about the product's unique selling points
 
+If the user shares a reference image or UGC example:
+- Analyze the visual style, lighting, composition, and mood
+- Identify the ad angle being used (us-vs-them, before-after, or social proof)
+- Extract the authentic elements that make it feel real (not staged)
+- Use what you see to shape your creative direction recommendations
+- Be specific: "I see you're going for X lighting, Y composition, Z vibe..."
+
 Based on the conversation, extract a concise creative brief that can guide image generation. Always be specific, directorial, and opinionated — you have a strong aesthetic point of view.
 
 NEVER use emojis. Be concise and direct.`;
@@ -133,12 +142,14 @@ router.post("/conversations/:id/messages", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
 
   try {
-    const { content } = parsed.data;
+    const { content, referenceImageBase64, referenceImageMime } = parsed.data;
 
     await db.insert(messages).values({
       conversationId: id,
       role: "user",
-      content,
+      content: referenceImageBase64
+        ? `[Reference image attached] ${content}`
+        : content,
     });
 
     const history = await db
@@ -147,12 +158,32 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .where(eq(messages.conversationId, id))
       .orderBy(messages.createdAt);
 
-    const chatMessages = [
+    type OAIMessageContent =
+      | string
+      | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" } }>;
+
+    const buildUserContent = (text: string, imgB64?: string, mime?: string): OAIMessageContent => {
+      if (!imgB64) return text;
+      const dataUrl = `data:${mime ?? "image/jpeg"};base64,${imgB64}`;
+      return [
+        { type: "text", text },
+        { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
+      ];
+    };
+
+    const historyMessages = history.map((m, i) => ({
+      role: m.role as "user" | "assistant",
+      content: (
+        i === history.length - 1 && m.role === "user" && referenceImageBase64
+          ? buildUserContent(content, referenceImageBase64, referenceImageMime)
+          : m.content
+      ) as OAIMessageContent,
+    }));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chatMessages: any[] = [
       { role: "system" as const, content: UGC_CHAT_SYSTEM_PROMPT },
-      ...history.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
+      ...historyMessages,
     ];
 
     let fullResponse = "";

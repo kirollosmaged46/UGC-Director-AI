@@ -401,27 +401,29 @@ export default function DirectorScreen() {
           },
         ]}
       >
-        <Pressable
-          style={[styles.generateBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
-          onPress={handleGenerate}
-        >
-          <MaterialCommunityIcons name="creation" size={20} color={colors.primaryForeground} />
-          <Text style={[styles.generateBtnText, { color: colors.primaryForeground }]}>
-            Generate Content
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[
-            styles.allAnglesBtn,
-            { borderColor: colors.primary, borderRadius: colors.radius },
-          ]}
-          onPress={handleGenerateAllAngles}
-        >
-          <MaterialCommunityIcons name="compare" size={18} color={colors.primary} />
-          <Text style={[styles.allAnglesBtnText, { color: colors.primary }]}>
-            Generate All 3 Angles
-          </Text>
-        </Pressable>
+        <View style={styles.footerRow}>
+          <Pressable
+            style={[
+              styles.allAnglesBtn,
+              { borderColor: colors.primary, borderRadius: colors.radius },
+            ]}
+            onPress={handleGenerateAllAngles}
+          >
+            <MaterialCommunityIcons name="compare" size={16} color={colors.primary} />
+            <Text style={[styles.allAnglesBtnText, { color: colors.primary }]} numberOfLines={1}>
+              All 3 Angles
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.generateBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+            onPress={handleGenerate}
+          >
+            <MaterialCommunityIcons name="creation" size={18} color={colors.primaryForeground} />
+            <Text style={[styles.generateBtnText, { color: colors.primaryForeground }]} numberOfLines={1}>
+              Generate
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -482,22 +484,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderTopWidth: 1,
   },
-  generateBtn: {
-    height: 54,
+  footerRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
     gap: 10,
   },
-  generateBtnText: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  allAnglesBtn: {
-    height: 46,
+  generateBtn: {
+    flex: 2,
+    height: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderWidth: 1.5,
-    marginTop: 10,
   },
-  allAnglesBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  generateBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  allAnglesBtn: {
+    flex: 1,
+    height: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1.5,
+  },
+  allAnglesBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
 });
