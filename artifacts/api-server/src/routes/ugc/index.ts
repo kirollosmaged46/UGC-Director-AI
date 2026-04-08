@@ -5,6 +5,7 @@ import { promisify } from "util";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { editImages, type ImageEditSize } from "@workspace/integrations-openai-ai-server";
 import { writeFile, unlink } from "fs/promises";
+import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
 import { uploadVideoAndGetUrl } from "../../lib/videoStorage";
@@ -126,7 +127,7 @@ router.post("/generate", async (req, res) => {
   try {
     const imageBuffer = Buffer.from(imageBase64, "base64");
     const tmpDir = os.tmpdir();
-    const productPath = path.join(tmpDir, `ugc-product-${Date.now()}.png`);
+    const productPath = path.join(tmpDir, `ugc-product-${randomUUID()}.png`);
     await writeFile(productPath, imageBuffer);
     tmpFiles.push(productPath);
 
@@ -193,7 +194,7 @@ Return ONLY valid JSON:
               sceneContext: scene.description,
             });
             const buf = await editImages([productPath], scenePrompt, undefined, aspectRatioToSize(aspectRatio));
-            const kfPath = path.join(tmpDir, `ugc-kf-${Date.now()}-${i}.png`);
+            const kfPath = path.join(tmpDir, `ugc-kf-${randomUUID()}.png`);
             await writeFile(kfPath, buf);
             tmpFiles.push(kfPath);
             keyframePaths[i] = kfPath;
@@ -204,7 +205,7 @@ Return ONLY valid JSON:
         throw err;
       }
 
-      const videoPath = path.join(tmpDir, `ugc-video-${Date.now()}.mp4`);
+      const videoPath = path.join(tmpDir, `ugc-video-${randomUUID()}.mp4`);
       tmpFiles.push(videoPath);
 
       await buildVideoFromKeyframes(keyframePaths, videoPath, aspectRatio);
