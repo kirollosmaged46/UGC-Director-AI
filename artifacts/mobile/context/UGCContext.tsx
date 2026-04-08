@@ -5,6 +5,25 @@ export type LightingMood = "golden-hour" | "studio-white" | "moody-dark" | "outd
 export type AspectRatio = "9:16" | "1:1" | "4:5" | "16:9";
 export type Platform = "tiktok" | "instagram" | "youtube";
 export type ContentType = "photo" | "video" | "both";
+export type AvatarGender = "male" | "female";
+export type AvatarStyle = "casual" | "professional" | "streetwear" | "sporty";
+export type AvatarLanguage =
+  | "english"
+  | "arabic"
+  | "spanish"
+  | "french"
+  | "german"
+  | "portuguese"
+  | "hindi"
+  | "chinese";
+
+export interface AvatarConfig {
+  enabled: boolean;
+  gender: AvatarGender;
+  style: AvatarStyle;
+  language: AvatarLanguage;
+  ethnicity: string;
+}
 
 export interface GeneratedImage {
   b64_json: string;
@@ -14,6 +33,13 @@ export interface GeneratedImage {
 
 export interface Hook {
   text: string;
+  platform: string;
+}
+
+export interface Script {
+  hook: string;
+  body: string;
+  cta: string;
   platform: string;
 }
 
@@ -28,6 +54,8 @@ export interface GenerationResult {
   aspectRatio: AspectRatio;
   platform: Platform;
   contentType: ContentType;
+  productName?: string;
+  selectedScript?: Script;
   createdAt: number;
 }
 
@@ -40,11 +68,27 @@ export interface UGCSettings {
   platform: Platform;
 }
 
+const DEFAULT_AVATAR: AvatarConfig = {
+  enabled: false,
+  gender: "female",
+  style: "casual",
+  language: "english",
+  ethnicity: "diverse",
+};
+
 interface UGCContextValue {
   productImageUri: string | null;
   setProductImageUri: (uri: string | null) => void;
+  productName: string;
+  setProductName: (name: string) => void;
+  productDescription: string;
+  setProductDescription: (desc: string) => void;
   settings: UGCSettings;
   updateSettings: (partial: Partial<UGCSettings>) => void;
+  avatar: AvatarConfig;
+  updateAvatar: (partial: Partial<AvatarConfig>) => void;
+  selectedScript: Script | null;
+  setSelectedScript: (script: Script | null) => void;
   creativeVision: string;
   setCreativeVision: (v: string) => void;
   conversationId: number | null;
@@ -69,12 +113,16 @@ const DEFAULT_SETTINGS: UGCSettings = {
   aspectRatio: "9:16",
   count: 1,
   contentType: "photo",
-  platform: "instagram",
+  platform: "tiktok",
 };
 
 export function UGCProvider({ children }: { children: React.ReactNode }) {
   const [productImageUri, setProductImageUri] = useState<string | null>(null);
+  const [productName, setProductName] = useState("");
+  const [productDescription, setProductDescription] = useState("");
   const [settings, setSettings] = useState<UGCSettings>(DEFAULT_SETTINGS);
+  const [avatar, setAvatar] = useState<AvatarConfig>(DEFAULT_AVATAR);
+  const [selectedScript, setSelectedScript] = useState<Script | null>(null);
   const [creativeVision, setCreativeVision] = useState("");
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [history, setHistory] = useState<GenerationResult[]>([]);
@@ -85,6 +133,10 @@ export function UGCProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = useCallback((partial: Partial<UGCSettings>) => {
     setSettings((prev) => ({ ...prev, ...partial }));
+  }, []);
+
+  const updateAvatar = useCallback((partial: Partial<AvatarConfig>) => {
+    setAvatar((prev) => ({ ...prev, ...partial }));
   }, []);
 
   const addToHistory = useCallback((result: GenerationResult) => {
@@ -104,8 +156,16 @@ export function UGCProvider({ children }: { children: React.ReactNode }) {
       value={{
         productImageUri,
         setProductImageUri,
+        productName,
+        setProductName,
+        productDescription,
+        setProductDescription,
         settings,
         updateSettings,
+        avatar,
+        updateAvatar,
+        selectedScript,
+        setSelectedScript,
         creativeVision,
         setCreativeVision,
         conversationId,

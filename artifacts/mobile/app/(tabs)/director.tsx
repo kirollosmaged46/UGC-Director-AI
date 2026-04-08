@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   Platform,
-  Alert,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -28,46 +27,43 @@ import {
 
 type IonicIcon = React.ComponentProps<typeof Ionicons>["name"];
 
-const AD_ANGLES: { id: AdAngle; label: string; tagline: string; icon: IonicIcon }[] = [
+const AD_ANGLES: { id: AdAngle; label: string; tagline: string; icon: IonicIcon; desc: string }[] = [
   {
     id: "us-vs-them",
     label: "Us vs. Them",
     tagline: "Make the choice obvious",
     icon: "swap-horizontal-outline",
+    desc: "Creator tried the old way — then found this. The contrast is undeniable.",
   },
   {
     id: "before-after",
     label: "Before & After",
     tagline: "Show the transformation",
     icon: "trending-up-outline",
+    desc: "Real before moment, real after result. Emotion carries the story.",
   },
   {
     id: "social-proof",
     label: "Social Proof",
     tagline: "Everyone's already using it",
     icon: "people-outline",
+    desc: "Unboxing or mid-use discovery. Genuine surprise, lived-in setting.",
   },
 ];
 
-const LIGHTING: { id: LightingMood; label: string; color: string; desc: string }[] = [
-  { id: "golden-hour", label: "Golden Hour", color: "#F59E0B", desc: "Warm & cinematic" },
-  { id: "studio-white", label: "Studio", color: "#E2E8F0", desc: "Clean & crisp" },
-  { id: "moody-dark", label: "Moody Dark", color: "#1E293B", desc: "Dramatic shadows" },
-  { id: "outdoor-natural", label: "Natural", color: "#86EFAC", desc: "Fresh & bright" },
-  { id: "neon", label: "Neon", color: "#A855F7", desc: "Nightlife energy" },
+const LIGHTING: { id: LightingMood; label: string; color: string; desc: string; emoji: string }[] = [
+  { id: "golden-hour", label: "Golden Hour", color: "#F59E0B", desc: "Warm & cinematic", emoji: "🌅" },
+  { id: "studio-white", label: "Studio", color: "#CBD5E1", desc: "Clean & crisp", emoji: "💡" },
+  { id: "moody-dark", label: "Moody Dark", color: "#475569", desc: "Dramatic shadows", emoji: "🌑" },
+  { id: "outdoor-natural", label: "Natural", color: "#86EFAC", desc: "Fresh & bright", emoji: "☀️" },
+  { id: "neon", label: "Neon", color: "#A855F7", desc: "Nightlife energy", emoji: "🌆" },
 ];
 
-const RATIOS: { id: AspectRatio; label: string; desc: string }[] = [
-  { id: "9:16", label: "9:16", desc: "TikTok / Reels" },
-  { id: "1:1", label: "1:1", desc: "Square" },
-  { id: "4:5", label: "4:5", desc: "Instagram" },
-  { id: "16:9", label: "16:9", desc: "YouTube" },
-];
-
-const PLATFORMS: { id: SocialPlatform; label: string; icon: IonicIcon }[] = [
-  { id: "tiktok", label: "TikTok", icon: "logo-tiktok" },
-  { id: "instagram", label: "Instagram", icon: "logo-instagram" },
-  { id: "youtube", label: "YouTube", icon: "logo-youtube" },
+const RATIOS: { id: AspectRatio; label: string; desc: string; icon: string }[] = [
+  { id: "9:16", label: "9:16", desc: "TikTok / Reels", icon: "📱" },
+  { id: "1:1", label: "1:1", desc: "Square", icon: "⬜" },
+  { id: "4:5", label: "4:5", desc: "Instagram Feed", icon: "🖼️" },
+  { id: "16:9", label: "16:9", desc: "YouTube", icon: "🖥️" },
 ];
 
 const CONTENT_TYPES: { id: ContentType; label: string; icon: IonicIcon; desc: string }[] = [
@@ -75,6 +71,8 @@ const CONTENT_TYPES: { id: ContentType; label: string; icon: IonicIcon; desc: st
   { id: "video", label: "Video", icon: "film-outline", desc: "Real mp4" },
   { id: "both", label: "Both", icon: "layers-outline", desc: "Photos + Video" },
 ];
+
+const COUNT_OPTIONS = [1, 2, 3];
 
 function OptionChip({
   selected,
@@ -94,7 +92,7 @@ function OptionChip({
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.primary : colors.secondary,
+          backgroundColor: selected ? colors.primary : colors.card,
           borderColor: selected ? colors.primary : colors.border,
           borderRadius: colors.radius,
         },
@@ -113,9 +111,17 @@ export default function DirectorScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
+  const pick = useCallback(
+    <K extends keyof typeof settings>(key: K, value: typeof settings[K]) => {
+      Haptics.selectionAsync();
+      updateSettings({ [key]: value } as Partial<typeof settings>);
+    },
+    [updateSettings]
+  );
+
   const handleGenerate = useCallback(() => {
     if (!productImageUri) {
-      Alert.alert("No Product", "Please upload a product image first.");
+      router.push("/(tabs)/index");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -126,7 +132,7 @@ export default function DirectorScreen() {
 
   const handleGenerateAllAngles = useCallback(() => {
     if (!productImageUri) {
-      Alert.alert("No Product", "Please upload a product image first.");
+      router.push("/(tabs)/index");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -135,198 +141,112 @@ export default function DirectorScreen() {
     router.push("/(tabs)/generate");
   }, [productImageUri, triggerGenerateAllAngles, setCurrentResult]);
 
-  const pick = useCallback(
-    <K extends keyof typeof settings>(key: K, value: typeof settings[K]) => {
-      Haptics.selectionAsync();
-      const partial = {} as Partial<typeof settings>;
-      partial[key] = value;
-      updateSettings(partial);
-    },
-    [updateSettings]
-  );
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: topPad + 16, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 20 },
-        ]}
+        contentContainerStyle={[styles.content, { paddingTop: topPad + 16, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 20 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[styles.screenTitle, { color: colors.foreground }]}>Direction</Text>
-        <Text style={[styles.screenSub, { color: colors.mutedForeground }]}>
-          Set your creative parameters
-        </Text>
+        <Animated.View entering={FadeInDown.duration(500)}>
+          <Text style={[styles.screenTitle, { color: colors.foreground }]}>Direction</Text>
+          <Text style={[styles.screenSub, { color: colors.mutedForeground }]}>
+            Set the creative parameters for your content
+          </Text>
+        </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PLATFORM</Text>
+        <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>OUTPUT TYPE</Text>
           <View style={styles.row}>
-            {PLATFORMS.map((p) => (
-              <OptionChip
-                key={p.id}
-                selected={settings.platform === p.id}
-                onPress={() => pick("platform", p.id)}
-                style={styles.platformChip}
-              >
-                <Ionicons
-                  name={p.icon}
-                  size={18}
-                  color={settings.platform === p.id ? colors.primaryForeground : colors.foreground}
-                />
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    {
-                      color:
-                        settings.platform === p.id ? colors.primaryForeground : colors.foreground,
-                    },
-                  ]}
-                >
-                  {p.label}
+            {CONTENT_TYPES.map((t) => (
+              <OptionChip key={t.id} selected={settings.contentType === t.id} onPress={() => pick("contentType", t.id)} style={styles.flex1}>
+                <Ionicons name={t.icon} size={16} color={settings.contentType === t.id ? colors.primaryForeground : colors.foreground} />
+                <Text style={[styles.chipLabel, { color: settings.contentType === t.id ? colors.primaryForeground : colors.foreground }]}>
+                  {t.label}
+                </Text>
+                <Text style={[styles.chipSub, { color: settings.contentType === t.id ? "rgba(255,255,255,0.7)" : colors.mutedForeground }]}>
+                  {t.desc}
                 </Text>
               </OptionChip>
             ))}
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(150).duration(500)} style={styles.section}>
+        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.section}>
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>AD ANGLE</Text>
-          <View style={styles.angleGrid}>
-            {AD_ANGLES.map((a) => {
-              const selected = settings.angle === a.id;
-              return (
-                <Pressable
-                  key={a.id}
-                  onPress={() => pick("angle", a.id)}
-                  style={[
-                    styles.angleCard,
-                    {
-                      backgroundColor: selected ? colors.primary : colors.card,
-                      borderColor: selected ? colors.primary : colors.border,
-                      borderRadius: colors.radius * 1.5,
-                    },
-                  ]}
-                >
-                  <View style={styles.angleCardTop}>
-                    <Ionicons
-                      name={a.icon}
-                      size={22}
-                      color={selected ? colors.primaryForeground : colors.primary}
-                    />
-                    {selected && (
-                      <Ionicons name="checkmark-circle" size={18} color={colors.primaryForeground} />
-                    )}
-                  </View>
-                  <Text
-                    style={[
-                      styles.angleLabel,
-                      { color: selected ? colors.primaryForeground : colors.foreground },
-                    ]}
-                  >
-                    {a.label}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.angleTagline,
-                      { color: selected ? "rgba(255,255,255,0.75)" : colors.mutedForeground },
-                    ]}
-                  >
+          {AD_ANGLES.map((a) => (
+            <Pressable
+              key={a.id}
+              onPress={() => pick("angle", a.id)}
+              style={[
+                styles.angleCard,
+                {
+                  backgroundColor: settings.angle === a.id ? colors.primary : colors.card,
+                  borderColor: settings.angle === a.id ? colors.primary : colors.border,
+                  borderRadius: colors.radius * 1.5,
+                  borderWidth: settings.angle === a.id ? 2 : 1,
+                },
+              ]}
+            >
+              <View style={styles.angleHeader}>
+                <View style={[styles.angleIconBox, { backgroundColor: settings.angle === a.id ? "rgba(255,255,255,0.2)" : colors.secondary }]}>
+                  <Ionicons name={a.icon} size={18} color={settings.angle === a.id ? "#fff" : colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.angleLabel, { color: settings.angle === a.id ? "#fff" : colors.foreground }]}>{a.label}</Text>
+                  <Text style={[styles.angleTagline, { color: settings.angle === a.id ? "rgba(255,255,255,0.75)" : colors.mutedForeground }]}>
                     {a.tagline}
                   </Text>
-                </Pressable>
-              );
-            })}
+                </View>
+                {settings.angle === a.id && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+              </View>
+              <Text style={[styles.angleDesc, { color: settings.angle === a.id ? "rgba(255,255,255,0.8)" : colors.mutedForeground }]}>
+                {a.desc}
+              </Text>
+            </Pressable>
+          ))}
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(120).duration(400)} style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>LIGHTING MOOD</Text>
+          <View style={styles.lightingRow}>
+            {LIGHTING.map((l) => (
+              <Pressable
+                key={l.id}
+                onPress={() => pick("lighting", l.id)}
+                style={[
+                  styles.lightingChip,
+                  {
+                    backgroundColor: settings.lighting === l.id ? colors.primary : colors.card,
+                    borderColor: settings.lighting === l.id ? colors.primary : colors.border,
+                    borderRadius: colors.radius,
+                    borderWidth: settings.lighting === l.id ? 2 : 1,
+                  },
+                ]}
+              >
+                <Text style={styles.lightingEmoji}>{l.emoji}</Text>
+                <View style={[styles.lightingDot, { backgroundColor: l.color }]} />
+                <Text style={[styles.lightingLabel, { color: settings.lighting === l.id ? colors.primaryForeground : colors.foreground }]}>
+                  {l.label}
+                </Text>
+                <Text style={[styles.lightingSub, { color: settings.lighting === l.id ? "rgba(255,255,255,0.7)" : colors.mutedForeground }]}>
+                  {l.desc}
+                </Text>
+              </Pressable>
+            ))}
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>LIGHTING MOOD</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hScroll}>
-            <View style={styles.hRow}>
-              {LIGHTING.map((l) => (
-                <Pressable
-                  key={l.id}
-                  onPress={() => pick("lighting", l.id)}
-                  style={[
-                    styles.lightingChip,
-                    {
-                      backgroundColor:
-                        settings.lighting === l.id ? colors.primary : colors.card,
-                      borderColor:
-                        settings.lighting === l.id ? colors.primary : colors.border,
-                      borderRadius: colors.radius,
-                    },
-                  ]}
-                >
-                  <View style={[styles.lightingDot, { backgroundColor: l.color }]} />
-                  <Text
-                    style={[
-                      styles.lightingLabel,
-                      {
-                        color:
-                          settings.lighting === l.id
-                            ? colors.primaryForeground
-                            : colors.foreground,
-                      },
-                    ]}
-                  >
-                    {l.label}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.lightingDesc,
-                      {
-                        color:
-                          settings.lighting === l.id
-                            ? "rgba(255,255,255,0.7)"
-                            : colors.mutedForeground,
-                      },
-                    ]}
-                  >
-                    {l.desc}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(250).duration(500)} style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ASPECT RATIO</Text>
+        <Animated.View entering={FadeInDown.delay(140).duration(400)} style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>FORMAT</Text>
           <View style={styles.row}>
             {RATIOS.map((r) => (
-              <OptionChip
-                key={r.id}
-                selected={settings.aspectRatio === r.id}
-                onPress={() => pick("aspectRatio", r.id)}
-                style={styles.ratioChip}
-              >
-                <Text
-                  style={[
-                    styles.ratioLabel,
-                    {
-                      color:
-                        settings.aspectRatio === r.id
-                          ? colors.primaryForeground
-                          : colors.foreground,
-                    },
-                  ]}
-                >
+              <OptionChip key={r.id} selected={settings.aspectRatio === r.id} onPress={() => pick("aspectRatio", r.id)} style={styles.flex1}>
+                <Text style={styles.ratioIcon}>{r.icon}</Text>
+                <Text style={[styles.ratioLabel, { color: settings.aspectRatio === r.id ? colors.primaryForeground : colors.foreground }]}>
                   {r.label}
                 </Text>
-                <Text
-                  style={[
-                    styles.ratioDesc,
-                    {
-                      color:
-                        settings.aspectRatio === r.id
-                          ? "rgba(255,255,255,0.7)"
-                          : colors.mutedForeground,
-                    },
-                  ]}
-                >
+                <Text style={[styles.chipSub, { color: settings.aspectRatio === r.id ? "rgba(255,255,255,0.7)" : colors.mutedForeground }]}>
                   {r.desc}
                 </Text>
               </OptionChip>
@@ -334,98 +254,50 @@ export default function DirectorScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>OUTPUT TYPE</Text>
-          <View style={styles.row}>
-            {CONTENT_TYPES.map((ct) => (
-              <OptionChip
-                key={ct.id}
-                selected={settings.contentType === ct.id}
-                onPress={() => pick("contentType", ct.id)}
-                style={styles.ctypeChip}
-              >
-                <Ionicons
-                  name={ct.icon}
-                  size={18}
-                  color={settings.contentType === ct.id ? colors.primaryForeground : colors.primary}
-                />
-                <Text
+        {settings.contentType !== "video" && (
+          <Animated.View entering={FadeInDown.delay(160).duration(400)} style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>NUMBER OF IMAGES</Text>
+            <View style={styles.countRow}>
+              {COUNT_OPTIONS.map((c) => (
+                <Pressable
+                  key={c}
+                  onPress={() => { Haptics.selectionAsync(); updateSettings({ count: c }); }}
                   style={[
-                    styles.chipLabel,
+                    styles.countChip,
                     {
-                      color:
-                        settings.contentType === ct.id ? colors.primaryForeground : colors.foreground,
+                      backgroundColor: settings.count === c ? colors.primary : colors.card,
+                      borderColor: settings.count === c ? colors.primary : colors.border,
+                      borderRadius: colors.radius,
                     },
                   ]}
                 >
-                  {ct.label}
-                </Text>
-              </OptionChip>
-            ))}
-          </View>
-        </Animated.View>
+                  <Text style={[styles.countLabel, { color: settings.count === c ? colors.primaryForeground : colors.foreground }]}>
+                    {c}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Animated.View>
+        )}
 
-        <Animated.View entering={FadeInDown.delay(350).duration(500)} style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>NUMBER OF OUTPUTS</Text>
-          <View style={styles.row}>
-            {[1, 2, 3].map((n) => (
-              <OptionChip
-                key={n}
-                selected={settings.count === n}
-                onPress={() => pick("count", n)}
-                style={styles.countChip}
-              >
-                <Text
-                  style={[
-                    styles.countLabel,
-                    {
-                      color:
-                        settings.count === n ? colors.primaryForeground : colors.foreground,
-                    },
-                  ]}
-                >
-                  {n}
-                </Text>
-              </OptionChip>
-            ))}
-          </View>
-        </Animated.View>
-      </ScrollView>
-
-      <View
-        style={[
-          styles.footer,
-          {
-            backgroundColor: colors.background,
-            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8,
-            borderTopColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.footerRow}>
-          <Pressable
-            style={[
-              styles.allAnglesBtn,
-              { borderColor: colors.primary, borderRadius: colors.radius },
-            ]}
-            onPress={handleGenerateAllAngles}
-          >
-            <MaterialCommunityIcons name="compare" size={16} color={colors.primary} />
-            <Text style={[styles.allAnglesBtnText, { color: colors.primary }]} numberOfLines={1}>
-              All 3 Angles
-            </Text>
-          </Pressable>
+        <Animated.View entering={FadeInDown.delay(180).duration(400)} style={styles.generateSection}>
           <Pressable
             style={[styles.generateBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
             onPress={handleGenerate}
           >
-            <MaterialCommunityIcons name="creation" size={18} color={colors.primaryForeground} />
-            <Text style={[styles.generateBtnText, { color: colors.primaryForeground }]} numberOfLines={1}>
-              Generate
-            </Text>
+            <MaterialCommunityIcons name="creation" size={20} color="#fff" />
+            <Text style={styles.generateBtnText}>Generate Now</Text>
           </Pressable>
-        </View>
-      </View>
+
+          <Pressable
+            style={[styles.allAnglesBtn, { backgroundColor: colors.secondary, borderRadius: colors.radius }]}
+            onPress={handleGenerateAllAngles}
+          >
+            <Ionicons name="layers-outline" size={18} color={colors.primary} />
+            <Text style={[styles.allAnglesBtnText, { color: colors.primary }]}>Generate All 3 Angles</Text>
+          </Pressable>
+        </Animated.View>
+      </ScrollView>
     </View>
   );
 }
@@ -434,78 +306,35 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 20, gap: 24 },
-  screenTitle: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
-  screenSub: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  section: { gap: 10 },
-  sectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2 },
-  row: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  chip: { borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 6 },
-  chipLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  platformChip: { flex: 1, justifyContent: "center" },
-  angleGrid: { gap: 10 },
-  angleCard: {
-    borderWidth: 1.5,
-    padding: 16,
-    gap: 6,
-  },
-  angleCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  angleLabel: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  angleTagline: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  hScroll: { marginHorizontal: -20, paddingHorizontal: 20 },
-  hRow: { flexDirection: "row", gap: 10, paddingRight: 20 },
-  lightingChip: {
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    width: 130,
-    gap: 6,
-  },
-  lightingDot: { width: 24, height: 8, borderRadius: 4 },
-  lightingLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  lightingDesc: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  ratioChip: {
-    flex: 1,
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 2,
-    paddingVertical: 12,
-  },
-  ratioLabel: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  ratioDesc: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  ctypeChip: { flex: 1, justifyContent: "center" },
-  countChip: {
-    width: 56,
-    height: 56,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  countLabel: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  footer: {
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-  },
-  footerRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  generateBtn: {
-    flex: 2,
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  generateBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  allAnglesBtn: {
-    flex: 1,
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    borderWidth: 1.5,
-  },
-  allAnglesBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  screenTitle: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  screenSub: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 4, lineHeight: 20 },
+  section: { gap: 12 },
+  sectionLabel: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  row: { flexDirection: "row", gap: 8 },
+  flex1: { flex: 1 },
+  chip: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, alignItems: "center", gap: 4, borderWidth: 1.5 },
+  chipLabel: { fontSize: 13, fontFamily: "Inter_700Bold", textAlign: "center" },
+  chipSub: { fontSize: 10, fontFamily: "Inter_400Regular", textAlign: "center" },
+  angleCard: { padding: 14, gap: 8 },
+  angleHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  angleIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  angleLabel: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  angleTagline: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  angleDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  lightingRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  lightingChip: { width: "30%", paddingVertical: 10, paddingHorizontal: 8, alignItems: "center", gap: 4 },
+  lightingEmoji: { fontSize: 22 },
+  lightingDot: { width: 8, height: 8, borderRadius: 4 },
+  lightingLabel: { fontSize: 11, fontFamily: "Inter_700Bold", textAlign: "center" },
+  lightingSub: { fontSize: 9, fontFamily: "Inter_400Regular", textAlign: "center" },
+  ratioIcon: { fontSize: 18 },
+  ratioLabel: { fontSize: 12, fontFamily: "Inter_700Bold", textAlign: "center" },
+  countRow: { flexDirection: "row", gap: 10 },
+  countChip: { width: 56, height: 56, alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
+  countLabel: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  generateSection: { gap: 10 },
+  generateBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, height: 56 },
+  generateBtnText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff" },
+  allAnglesBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 48 },
+  allAnglesBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });

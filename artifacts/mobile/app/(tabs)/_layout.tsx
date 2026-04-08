@@ -6,7 +6,6 @@ import { SymbolView } from "expo-symbols";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
-
 import { useColors } from "@/hooks/useColors";
 
 export const TAB_BAR_HEIGHT = 49;
@@ -16,15 +15,19 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "photo", selected: "photo.fill" }} />
-        <Label>Studio</Label>
+        <Label>Product</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="script">
+        <Icon sf={{ default: "doc.text", selected: "doc.text.fill" }} />
+        <Label>Script</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="avatar">
+        <Icon sf={{ default: "person.crop.circle", selected: "person.crop.circle.fill" }} />
+        <Label>Avatar</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="director">
         <Icon sf={{ default: "slider.horizontal.3", selected: "slider.horizontal.3" }} />
         <Label>Direction</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="chat">
-        <Icon sf={{ default: "bubble.left", selected: "bubble.left.fill" }} />
-        <Label>Director AI</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="generate">
         <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
@@ -70,17 +73,42 @@ function ClassicTabLayout() {
               style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
             />
           ),
+        tabBarLabelStyle: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Studio",
+          title: "Product",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="photo" tintColor={color} size={22} />
             ) : (
               <Ionicons name="image-outline" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="script"
+        options={{
+          title: "Script",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="doc.text" tintColor={color} size={22} />
+            ) : (
+              <Ionicons name="document-text-outline" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="avatar"
+        options={{
+          title: "Avatar",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="person.crop.circle" tintColor={color} size={22} />
+            ) : (
+              <Ionicons name="person-circle-outline" size={22} color={color} />
             ),
         }}
       />
@@ -93,18 +121,6 @@ function ClassicTabLayout() {
               <SymbolView name="slider.horizontal.3" tintColor={color} size={22} />
             ) : (
               <Ionicons name="options-outline" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: "Director AI",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="bubble.left" tintColor={color} size={22} />
-            ) : (
-              <Ionicons name="chatbubble-outline" size={22} color={color} />
             ),
         }}
       />
@@ -132,6 +148,7 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      <Tabs.Screen name="chat" options={{ href: null }} />
     </Tabs>
   );
 }

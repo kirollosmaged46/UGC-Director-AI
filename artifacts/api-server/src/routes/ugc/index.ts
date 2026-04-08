@@ -22,8 +22,22 @@ const GenerateSchema = z.object({
   aspectRatio: z.enum(["9:16", "1:1", "4:5", "16:9"]),
   count: z.number().int().min(1).max(3),
   contentType: z.enum(["photo", "video"]),
-  platform: z.enum(["tiktok", "instagram", "youtube"]).default("instagram"),
-  creativeVision: z.string().max(2000).optional(),
+  platform: z.enum(["tiktok", "instagram", "youtube"]).default("tiktok"),
+  productName: z.string().max(200).optional(),
+  creativeVision: z.string().max(3000).optional(),
+  avatarEnabled: z.boolean().optional().default(false),
+  avatarGender: z.enum(["male", "female"]).optional().default("female"),
+  avatarStyle: z.enum(["casual", "professional", "streetwear", "sporty"]).optional().default("casual"),
+  avatarEthnicity: z.string().max(50).optional().default("diverse"),
+  avatarLanguage: z.string().max(30).optional().default("english"),
+});
+
+const ScriptsSchema = z.object({
+  productName: z.string().min(1).max(200),
+  productDescription: z.string().max(1000).optional(),
+  platform: z.enum(["tiktok", "instagram", "youtube"]),
+  angle: z.enum(AD_ANGLE_ENUM),
+  count: z.number().int().min(1).max(5).default(5),
 });
 
 const HooksSchema = z.object({
@@ -145,7 +159,15 @@ router.post("/generate", async (req, res) => {
     return;
   }
 
-  const { imageBase64, angle, lighting, aspectRatio, count, contentType, platform, creativeVision } = parsed.data;
+  const {
+    imageBase64, angle, lighting, aspectRatio, count, contentType, platform,
+    productName, creativeVision,
+    avatarEnabled, avatarGender, avatarStyle, avatarEthnicity, avatarLanguage,
+  } = parsed.data;
+
+  const avatarContext = avatarEnabled
+    ? `\nAVATAR CREATOR: ${avatarGender}, ${avatarEthnicity} ethnicity, ${avatarStyle} style, ${avatarLanguage}-speaking creator. The avatar is a photorealistic real-looking person who appears to be holding and presenting the product directly to camera. Their face, hands, arms, and clothing must be visible and natural. They look like a genuine UGC creator — not a model, not a stock photo person.`
+    : "";
   const tmpFiles: string[] = [];
 
   try {
@@ -169,7 +191,8 @@ Ad angle: ${angle === "us-vs-them" ? "Us vs. Them — show why this product wins
 Lighting: ${lighting}
 Aspect ratio: ${aspectRatio}
 Platform: ${platform}
-Creative vision: ${creativeVision ?? "authentic lifestyle, real person energy"}
+Product: ${productName ?? "this product"}
+Creative vision: ${creativeVision ?? "authentic lifestyle, real person energy"}${avatarContext}
 
 Rules:
 - Each scene is 4-5 seconds
@@ -215,7 +238,8 @@ Return ONLY valid JSON:
               lighting,
               aspectRatio,
               platform,
-              creativeVision,
+              productName,
+              creativeVision: (creativeVision ?? "") + avatarContext,
               sceneContext: scene.description,
             });
             const buf = await editProductImage(productPath, scenePrompt, aspectRatioToSize(aspectRatio));
@@ -243,7 +267,7 @@ Return ONLY valid JSON:
 
     const generatedImages = [];
     for (let i = 0; i < count; i++) {
-      const prompt = buildUgcPrompt({ angle, lighting, aspectRatio, platform, creativeVision });
+      const prompt = buildUgcPrompt({ angle, lighting, aspectRatio, platform, productName, creativeVision: (creativeVision ?? "") + avatarContext });
       const editedBuffer = await editProductImage(productPath, prompt, aspectRatioToSize(aspectRatio));
       generatedImages.push({
         b64_json: editedBuffer.toString("base64"),
@@ -320,6 +344,85 @@ Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${p
   } catch (err) {
     req.log.error({ err }, "Failed to generate hooks");
     res.status(500).json({ error: "Failed to generate hooks" });
+  }
+});
+
+router.post("/scripts", async (req, res) => {
+  const parsed = ScriptsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+
+  const { productName, productDescription, platform, angle, count } = parsed.data;
+
+  const angleGuide =
+    angle === "us-vs-them"
+      ? "Us vs. Them — the creator tried the old way and is done with it. Script opens with the pain of the 'old way', then the switch moment, then the undeniable result."
+      : angle === "before-after"
+      ? "Before & After — real before-state (a genuine problem moment), then the product as quiet catalyst, then the after feeling. Emotion carries it."
+      : "Social Proof / Unboxing — genuine surprise or quiet satisfaction. Real person, real moment. One specific personal detail that makes it feel real.";
+
+  const platformGuide =
+    platform === "tiktok"
+      ? "TikTok: Gen Z voice, punchy, lowercase where natural, feels like one take on a phone. Hook must be the first sentence — no intro, no 'hey guys'."
+      : platform === "instagram"
+      ? "Instagram Reels: slightly more composed than TikTok but still organic. Warm, aspirational, personal. Lifestyle creator energy."
+      : "YouTube Shorts: value-driven, problem-solution, slightly longer sentences. Optimized for watch time.";
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.2",
+      max_completion_tokens: 2000,
+      messages: [
+        {
+          role: "user",
+          content: `You are an elite UGC ad scriptwriter. Generate ${count} distinct script options for the following product.
+
+PRODUCT: ${productName}
+${productDescription ? `DESCRIPTION: ${productDescription}` : ""}
+
+PLATFORM: ${platformGuide}
+
+AD ANGLE: ${angleGuide}
+
+AUTHENTICITY RULES:
+- Every script must sound like a real person talking, not a brand
+- Hook must stop the scroll in 0.3 seconds — surprising, relatable, or uncomfortable
+- No corporate language, no buzzwords, no "game-changer", no "revolutionary"
+- Dialogue must sound like texting out loud, not a script
+- CTA must be casual and first-person — never "click the link below" or "buy now"
+- Would a real 22-year-old post this? If no — rewrite it
+
+Return ONLY valid JSON in this exact format:
+{
+  "scripts": [
+    {
+      "hook": "The exact opening line — max 15 words, scroll-stopping",
+      "body": "The main message — 2-4 sentences, conversational, platform-native",
+      "cta": "The closing call to action — casual, first-person, max 10 words",
+      "platform": "${platform}"
+    }
+  ]
+}
+
+Generate exactly ${count} distinct scripts with different hooks and angles. No two should feel the same.`,
+        },
+      ],
+    });
+
+    const raw = response.choices[0]?.message?.content ?? '{"scripts":[]}';
+    try {
+      const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as { scripts: Array<{ hook: string; body: string; cta: string; platform: string }> };
+      res.json({ scripts: parsed.scripts ?? [] });
+    } catch {
+      req.log.warn({ raw }, "Failed to parse scripts JSON");
+      res.json({ scripts: [] });
+    }
+  } catch (err) {
+    req.log.error({ err }, "Failed to generate scripts");
+    res.status(500).json({ error: "Failed to generate scripts" });
   }
 });
 
