@@ -140,7 +140,18 @@ paths:
               $ref: "#/components/schemas/SendOpenaiMessageBody"
       responses:
         "200":
-          description: SSE stream of assistant text chunks
+          description: |
+            Server-Sent Events (SSE) stream of assistant text chunks.
+
+            Each SSE event is a `data:` line containing a JSON object with one of these shapes:
+            - Streaming chunk: `{ "content": "<partial text>" }`
+            - Stream complete: `{ "done": true, "brief": "<1-3 sentence creative brief>" }`
+            - Error: `{ "error": "<message>" }`
+
+            The `brief` field in the done event contains a structured creative brief
+            extracted from the full response, optimized for use as an image generation prompt.
+            If brief extraction fails, `brief` may be absent — clients should fall back to the
+            accumulated `content` text in that case.
           content:
             text/event-stream: {}
   /ugc/generate:
@@ -345,6 +356,12 @@ components:
           type: string
         imageContext:
           type: string
+        count:
+          type: integer
+          minimum: 3
+          maximum: 5
+          default: 5
+          description: Number of hooks to generate (3-5)
       required:
         - productDescription
         - platform

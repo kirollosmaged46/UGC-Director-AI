@@ -162,11 +162,21 @@ export const GenerateUgcContentResponse = zod.object({
 /**
  * @summary Generate social media hooks and captions
  */
+export const generateUgcHooksBodyCountDefault = 5;
+export const generateUgcHooksBodyCountMin = 3;
+export const generateUgcHooksBodyCountMax = 5;
+
 export const GenerateUgcHooksBody = zod.object({
   productDescription: zod.string(),
   platform: zod.enum(["tiktok", "instagram", "youtube"]),
   tone: zod.string().optional(),
   imageContext: zod.string().optional(),
+  count: zod
+    .number()
+    .min(generateUgcHooksBodyCountMin)
+    .max(generateUgcHooksBodyCountMax)
+    .default(generateUgcHooksBodyCountDefault)
+    .describe("Number of hooks to generate (3-5)"),
 });
 
 export const GenerateUgcHooksResponse = zod.object({

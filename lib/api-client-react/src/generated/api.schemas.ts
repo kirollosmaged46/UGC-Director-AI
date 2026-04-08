@@ -160,6 +160,12 @@ export interface GenerateHooksBody {
   platform: GenerateHooksBodyPlatform;
   tone?: string;
   imageContext?: string;
+  /**
+   * Number of hooks to generate (3-5)
+   * @minimum 3
+   * @maximum 5
+   */
+  count?: number;
 }
 
 export type GenerateHooksResponseHooksItem = {

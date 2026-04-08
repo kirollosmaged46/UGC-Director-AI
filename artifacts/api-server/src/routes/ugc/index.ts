@@ -26,6 +26,7 @@ const HooksSchema = z.object({
   platform: z.enum(["tiktok", "instagram", "youtube"]),
   tone: z.string().max(100).default("authentic"),
   imageContext: z.string().max(2000).optional(),
+  count: z.number().int().min(3).max(5).default(5),
 });
 
 const ModelHookSchema = z.object({ text: z.string().min(1), platform: z.string() });
@@ -216,7 +217,7 @@ router.post("/hooks", async (req, res) => {
     return;
   }
 
-  const { productDescription, platform, tone, imageContext } = parsed.data;
+  const { productDescription, platform, tone, imageContext, count } = parsed.data;
 
   try {
     const platformGuide =
@@ -245,7 +246,7 @@ Rules:
 - Each hook must be under 150 characters
 - No emojis
 
-Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${platform}" }, ...] } with exactly 5 hooks.`,
+Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${platform}" }, ...] } with exactly ${count} hooks.`,
         },
       ],
     });
