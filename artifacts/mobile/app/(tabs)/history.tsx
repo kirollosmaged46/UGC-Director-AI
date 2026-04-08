@@ -64,6 +64,7 @@ function ResultCard({ item }: { item: GenerationResult }) {
           {hasVideo ? " + 1 video" : ""}
           {" · "}
           {new Date(item.createdAt).toLocaleDateString()}
+          {hasVideo ? " · video link 24h" : ""}
         </Text>
       </View>
     </Animated.View>
