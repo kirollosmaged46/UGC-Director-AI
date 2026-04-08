@@ -89,10 +89,10 @@ function PulsingDot({ color }: { color: string }) {
 
 function GeneratingView({
   colors,
-  isVideo,
+  phase,
 }: {
   colors: ReturnType<typeof useColors>;
-  isVideo?: boolean;
+  phase?: "photo" | "video";
 }) {
   const rotate = useSharedValue(0);
   useEffect(() => {
@@ -101,13 +101,14 @@ function GeneratingView({
   const rotateStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value}deg` }],
   }));
+  const titleText = phase === "video" ? "Generating video..." : phase === "photo" ? "Generating photos..." : "Generating...";
   return (
     <View style={styles.generatingContainer}>
       <Animated.View style={rotateStyle}>
         <MaterialCommunityIcons name="creation" size={52} color={colors.primary} />
       </Animated.View>
       <Text style={[styles.generatingTitle, { color: colors.foreground }]}>
-        {isVideo ? "Generating video..." : "Generating"}
+        {titleText}
       </Text>
       <View style={styles.dotsRow}>
         <PulsingDot color={colors.primary} />
@@ -115,7 +116,7 @@ function GeneratingView({
         <PulsingDot color={colors.primary} />
       </View>
       <Text style={[styles.generatingHint, { color: colors.mutedForeground }]}>
-        {isVideo
+        {phase === "video"
           ? "3 AI scenes → ffmpeg render → ~45s"
           : "Creating authentic UGC content..."}
       </Text>
@@ -262,6 +263,7 @@ export default function GenerateScreen() {
   } = useUGC();
 
   const [isLoading, setIsLoading] = useState(false);
+  const [generatingPhase, setGeneratingPhase] = useState<"photo" | "video" | undefined>(undefined);
   const [generatingHooks, setGeneratingHooks] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -314,6 +316,7 @@ export default function GenerateScreen() {
         const needsVideo = settings.contentType === "video" || settings.contentType === "both";
 
         if (needsPhoto) {
+          setGeneratingPhase("photo");
           const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -335,6 +338,7 @@ export default function GenerateScreen() {
         }
 
         if (needsVideo) {
+          setGeneratingPhase("video");
           const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -410,6 +414,7 @@ export default function GenerateScreen() {
         ]);
       } finally {
         setIsLoading(false);
+        setGeneratingPhase(undefined);
         setIsGenerating(false);
         isRunning.current = false;
       }
@@ -460,7 +465,7 @@ export default function GenerateScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <GeneratingView colors={colors} isVideo={settings.contentType !== "photo"} />
+        <GeneratingView colors={colors} phase={generatingPhase ?? (settings.contentType === "video" ? "video" : "photo")} />
       </View>
     );
   }
