@@ -5,22 +5,31 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GenerateUgcBodyAngle } from "./generateUgcBodyAngle";
+import type { GenerateUgcBodyAspectRatio } from "./generateUgcBodyAspectRatio";
+import type { GenerateUgcBodyContentType } from "./generateUgcBodyContentType";
+import type { GenerateUgcBodyLighting } from "./generateUgcBodyLighting";
+import type { GenerateUgcBodyPlatform } from "./generateUgcBodyPlatform";
 
 export interface GenerateUgcBody {
   /** Base64-encoded product image */
   imageBase64: string;
   /** Camera angle directive */
-  angle: string;
+  angle: GenerateUgcBodyAngle;
   /** Lighting mood */
-  lighting: string;
+  lighting: GenerateUgcBodyLighting;
   /** Output aspect ratio */
-  aspectRatio: string;
-  /** Number of images to generate (1-3) */
+  aspectRatio: GenerateUgcBodyAspectRatio;
+  /**
+   * Number of images to generate (1-3)
+   * @minimum 1
+   * @maximum 3
+   */
   count: number;
-  /** Type of content - photo or video_concept */
-  contentType: string;
+  /** Type of content. Note: 'both' is handled client-side by issuing two separate requests. */
+  contentType: GenerateUgcBodyContentType;
   /** Creative director instructions from AI chat */
   creativeVision?: string;
   /** Target social media platform */
-  platform?: string;
+  platform?: GenerateUgcBodyPlatform;
 }

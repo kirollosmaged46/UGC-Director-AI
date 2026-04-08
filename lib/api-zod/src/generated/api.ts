@@ -95,20 +95,50 @@ export const SendOpenaiMessageBody = zod.object({
 /**
  * @summary Generate UGC content from a product image
  */
+export const generateUgcContentBodyCountMax = 3;
+
 export const GenerateUgcContentBody = zod.object({
   imageBase64: zod.string().describe("Base64-encoded product image"),
-  angle: zod.string().describe("Camera angle directive"),
-  lighting: zod.string().describe("Lighting mood"),
-  aspectRatio: zod.string().describe("Output aspect ratio"),
-  count: zod.number().describe("Number of images to generate (1-3)"),
+  angle: zod
+    .enum([
+      "eye-level",
+      "overhead",
+      "low-angle",
+      "dutch-tilt",
+      "close-up",
+      "wide",
+    ])
+    .describe("Camera angle directive"),
+  lighting: zod
+    .enum([
+      "golden-hour",
+      "studio-white",
+      "moody-dark",
+      "outdoor-natural",
+      "neon",
+    ])
+    .describe("Lighting mood"),
+  aspectRatio: zod
+    .enum(["9:16", "1:1", "4:5", "16:9"])
+    .describe("Output aspect ratio"),
+  count: zod
+    .number()
+    .min(1)
+    .max(generateUgcContentBodyCountMax)
+    .describe("Number of images to generate (1-3)"),
   contentType: zod
-    .string()
-    .describe("Type of content - photo or video_concept"),
+    .enum(["photo", "video_concept"])
+    .describe(
+      "Type of content. Note: 'both' is handled client-side by issuing two separate requests.",
+    ),
   creativeVision: zod
     .string()
     .optional()
     .describe("Creative director instructions from AI chat"),
-  platform: zod.string().optional().describe("Target social media platform"),
+  platform: zod
+    .enum(["tiktok", "instagram", "youtube"])
+    .optional()
+    .describe("Target social media platform"),
 });
 
 export const GenerateUgcContentResponse = zod.object({
@@ -134,7 +164,7 @@ export const GenerateUgcContentResponse = zod.object({
  */
 export const GenerateUgcHooksBody = zod.object({
   productDescription: zod.string(),
-  platform: zod.string(),
+  platform: zod.enum(["tiktok", "instagram", "youtube"]),
   tone: zod.string().optional(),
   imageContext: zod.string().optional(),
 });

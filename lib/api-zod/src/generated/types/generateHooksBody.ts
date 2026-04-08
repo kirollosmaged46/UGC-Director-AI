@@ -5,10 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GenerateHooksBodyPlatform } from "./generateHooksBodyPlatform";
 
 export interface GenerateHooksBody {
   productDescription: string;
-  platform: string;
+  platform: GenerateHooksBodyPlatform;
   tone?: string;
   imageContext?: string;
 }

@@ -42,23 +42,92 @@ export interface OpenaiError {
   error: string;
 }
 
+/**
+ * Camera angle directive
+ */
+export type GenerateUgcBodyAngle =
+  (typeof GenerateUgcBodyAngle)[keyof typeof GenerateUgcBodyAngle];
+
+export const GenerateUgcBodyAngle = {
+  "eye-level": "eye-level",
+  overhead: "overhead",
+  "low-angle": "low-angle",
+  "dutch-tilt": "dutch-tilt",
+  "close-up": "close-up",
+  wide: "wide",
+} as const;
+
+/**
+ * Lighting mood
+ */
+export type GenerateUgcBodyLighting =
+  (typeof GenerateUgcBodyLighting)[keyof typeof GenerateUgcBodyLighting];
+
+export const GenerateUgcBodyLighting = {
+  "golden-hour": "golden-hour",
+  "studio-white": "studio-white",
+  "moody-dark": "moody-dark",
+  "outdoor-natural": "outdoor-natural",
+  neon: "neon",
+} as const;
+
+/**
+ * Output aspect ratio
+ */
+export type GenerateUgcBodyAspectRatio =
+  (typeof GenerateUgcBodyAspectRatio)[keyof typeof GenerateUgcBodyAspectRatio];
+
+export const GenerateUgcBodyAspectRatio = {
+  "9:16": "9:16",
+  "1:1": "1:1",
+  "4:5": "4:5",
+  "16:9": "16:9",
+} as const;
+
+/**
+ * Type of content. Note: 'both' is handled client-side by issuing two separate requests.
+ */
+export type GenerateUgcBodyContentType =
+  (typeof GenerateUgcBodyContentType)[keyof typeof GenerateUgcBodyContentType];
+
+export const GenerateUgcBodyContentType = {
+  photo: "photo",
+  video_concept: "video_concept",
+} as const;
+
+/**
+ * Target social media platform
+ */
+export type GenerateUgcBodyPlatform =
+  (typeof GenerateUgcBodyPlatform)[keyof typeof GenerateUgcBodyPlatform];
+
+export const GenerateUgcBodyPlatform = {
+  tiktok: "tiktok",
+  instagram: "instagram",
+  youtube: "youtube",
+} as const;
+
 export interface GenerateUgcBody {
   /** Base64-encoded product image */
   imageBase64: string;
   /** Camera angle directive */
-  angle: string;
+  angle: GenerateUgcBodyAngle;
   /** Lighting mood */
-  lighting: string;
+  lighting: GenerateUgcBodyLighting;
   /** Output aspect ratio */
-  aspectRatio: string;
-  /** Number of images to generate (1-3) */
+  aspectRatio: GenerateUgcBodyAspectRatio;
+  /**
+   * Number of images to generate (1-3)
+   * @minimum 1
+   * @maximum 3
+   */
   count: number;
-  /** Type of content - photo or video_concept */
-  contentType: string;
+  /** Type of content. Note: 'both' is handled client-side by issuing two separate requests. */
+  contentType: GenerateUgcBodyContentType;
   /** Creative director instructions from AI chat */
   creativeVision?: string;
   /** Target social media platform */
-  platform?: string;
+  platform?: GenerateUgcBodyPlatform;
 }
 
 export type GenerateUgcResponseImagesItem = {
@@ -77,9 +146,18 @@ export interface GenerateUgcResponse {
   videoConcepts?: GenerateUgcResponseVideoConceptsItem[];
 }
 
+export type GenerateHooksBodyPlatform =
+  (typeof GenerateHooksBodyPlatform)[keyof typeof GenerateHooksBodyPlatform];
+
+export const GenerateHooksBodyPlatform = {
+  tiktok: "tiktok",
+  instagram: "instagram",
+  youtube: "youtube",
+} as const;
+
 export interface GenerateHooksBody {
   productDescription: string;
-  platform: string;
+  platform: GenerateHooksBodyPlatform;
   tone?: string;
   imageContext?: string;
 }

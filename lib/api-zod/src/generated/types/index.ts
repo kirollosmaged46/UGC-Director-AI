@@ -8,9 +8,15 @@
 
 export * from "./createOpenaiConversationBody";
 export * from "./generateHooksBody";
+export * from "./generateHooksBodyPlatform";
 export * from "./generateHooksResponse";
 export * from "./generateHooksResponseHooksItem";
 export * from "./generateUgcBody";
+export * from "./generateUgcBodyAngle";
+export * from "./generateUgcBodyAspectRatio";
+export * from "./generateUgcBodyContentType";
+export * from "./generateUgcBodyLighting";
+export * from "./generateUgcBodyPlatform";
 export * from "./generateUgcResponse";
 export * from "./generateUgcResponseImagesItem";
 export * from "./generateUgcResponseVideoConceptsItem";
