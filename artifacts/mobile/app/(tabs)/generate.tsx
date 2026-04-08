@@ -132,10 +132,59 @@ function VideoCard({
   aspectRatio: string;
   colors: ReturnType<typeof useColors>;
 }) {
+  const [muted, setMuted] = useState(true);
+  const [saving, setSaving] = useState(false);
+
   const player = useVideoPlayer(videoUrl, (p) => {
     p.loop = true;
+    p.muted = true;
     p.play();
   });
+
+  const toggleMute = useCallback(() => {
+    const next = !muted;
+    setMuted(next);
+    player.muted = next;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [muted, player]);
+
+  const saveVideo = useCallback(async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("Info", "Saving is not supported in web preview.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Allow media library access to save videos.");
+        return;
+      }
+      const fileUri = `${FileSystem.Paths.cache.uri}ugc_video_${Date.now()}.mp4`;
+      const result = await FileSystem.downloadAsync(videoUrl, fileUri);
+      await MediaLibrary.saveToLibraryAsync(result.uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Saved", "Video saved to your camera roll.");
+    } catch {
+      Alert.alert("Error", "Could not save video.");
+    } finally {
+      setSaving(false);
+    }
+  }, [videoUrl]);
+
+  const shareVideo = useCallback(async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("Info", "Sharing is not supported in web preview.");
+      return;
+    }
+    try {
+      const fileUri = `${FileSystem.Paths.cache.uri}ugc_share_video_${Date.now()}.mp4`;
+      const result = await FileSystem.downloadAsync(videoUrl, fileUri);
+      await Share.share({ url: result.uri });
+    } catch {
+      // ignore
+    }
+  }, [videoUrl]);
 
   return (
     <Animated.View entering={FadeIn.duration(600)} style={styles.videoCardWrapper}>
@@ -149,17 +198,49 @@ function VideoCard({
           },
         ]}
       >
-        <VideoView
-          player={player}
-          style={[styles.videoPlayer, { height: imageHeight(aspectRatio) }]}
-          allowsPictureInPicture
-          contentFit="cover"
-        />
-        <View style={[styles.videoBadge, { backgroundColor: colors.primary }]}>
-          <Ionicons name="film-outline" size={12} color={colors.primaryForeground} />
-          <Text style={[styles.videoBadgeText, { color: colors.primaryForeground }]}>
-            Real Video · ~12s
-          </Text>
+        <Pressable onPress={toggleMute} style={{ position: "relative" }}>
+          <VideoView
+            player={player}
+            style={[styles.videoPlayer, { height: imageHeight(aspectRatio) }]}
+            allowsPictureInPicture
+            contentFit="cover"
+          />
+          <View style={[styles.videoBadge, { backgroundColor: colors.primary }]}>
+            <Ionicons name="film-outline" size={12} color={colors.primaryForeground} />
+            <Text style={[styles.videoBadgeText, { color: colors.primaryForeground }]}>
+              Real Video · ~12s
+            </Text>
+          </View>
+          <View style={[styles.muteBtn, { backgroundColor: "rgba(0,0,0,0.55)" }]}>
+            <Ionicons
+              name={muted ? "volume-mute-outline" : "volume-high-outline"}
+              size={16}
+              color="#fff"
+            />
+          </View>
+        </Pressable>
+        <View style={styles.imageActions}>
+          <Pressable
+            style={[styles.actionBtn, { backgroundColor: colors.secondary, borderRadius: colors.radius }]}
+            onPress={() => void saveVideo()}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.foreground} />
+            ) : (
+              <Ionicons name="download-outline" size={18} color={colors.foreground} />
+            )}
+            <Text style={[styles.actionBtnText, { color: colors.foreground }]}>
+              {saving ? "Saving..." : "Save"}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.actionBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+            onPress={() => void shareVideo()}
+          >
+            <Ionicons name="share-outline" size={18} color={colors.primaryForeground} />
+            <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Share</Text>
+          </Pressable>
         </View>
       </View>
     </Animated.View>
@@ -631,7 +712,7 @@ const styles = StyleSheet.create({
   },
   actionBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   videoCardWrapper: { gap: 0 },
-  videoCard: { borderWidth: 1, overflow: "hidden", position: "relative" },
+  videoCard: { borderWidth: 1, overflow: "hidden" },
   videoPlayer: { width: "100%" },
   videoBadge: {
     position: "absolute",
@@ -645,6 +726,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   videoBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  muteBtn: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   hooksSection: { gap: 10 },
   hooksTitleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   hooksTitle: { fontSize: 22, fontFamily: "Inter_700Bold", flex: 1 },

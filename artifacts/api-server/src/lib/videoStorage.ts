@@ -1,31 +1,38 @@
 import { Storage } from "@google-cloud/storage";
 import { randomUUID } from "crypto";
+import { writeFileSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
-const gcsCredentials = {
-  audience: "replit",
-  subject_token_type: "access_token",
-  token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-  type: "external_account",
-  credential_source: {
-    url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-    format: {
-      type: "json",
-      subject_token_field_name: "access_token",
+function buildGcsClient(): Storage {
+  const credContent = JSON.stringify({
+    type: "external_account",
+    audience: "replit",
+    subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
+    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
+    credential_source: {
+      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
+      format: { type: "json", subject_token_field_name: "access_token" },
     },
-  },
-  universe_domain: "googleapis.com",
-};
+    universe_domain: "googleapis.com",
+  });
+  const credPath = join(tmpdir(), `gcs-creds-${randomUUID()}.json`);
+  writeFileSync(credPath, credContent, { mode: 0o600 });
+  return new Storage({ keyFilename: credPath, projectId: "" });
+}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const gcs = new Storage({ credentials: gcsCredentials as any, projectId: "" });
+const gcs = buildGcsClient();
 
 export async function uploadVideoAndGetUrl(localPath: string): Promise<string> {
   const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-  if (!bucketId) throw new Error("DEFAULT_OBJECT_STORAGE_BUCKET_ID not set — run object storage setup");
+  if (!bucketId) {
+    throw new Error("DEFAULT_OBJECT_STORAGE_BUCKET_ID not set — run object storage setup");
+  }
 
   const objectName = `ugc-videos/${randomUUID()}.mp4`;
+
   await gcs.bucket(bucketId).upload(localPath, {
     destination: objectName,
     contentType: "video/mp4",
@@ -46,7 +53,9 @@ export async function uploadVideoAndGetUrl(localPath: string): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to get signed URL: ${response.status}`);
+    throw new Error(
+      `Failed to get signed URL from object storage sidecar: ${response.status}`
+    );
   }
 
   const { signed_url: signedUrl } = (await response.json()) as { signed_url: string };
