@@ -57,6 +57,8 @@ interface UGCContextValue {
   setIsGenerating: (v: boolean) => void;
   generateTrigger: number;
   triggerGenerate: () => void;
+  generateAllAnglesTrigger: number;
+  triggerGenerateAllAngles: () => void;
 }
 
 const UGCContext = createContext<UGCContextValue | null>(null);
@@ -79,6 +81,7 @@ export function UGCProvider({ children }: { children: React.ReactNode }) {
   const [currentResult, setCurrentResult] = useState<GenerationResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateTrigger, setGenerateTrigger] = useState(0);
+  const [generateAllAnglesTrigger, setGenerateAllAnglesTrigger] = useState(0);
 
   const updateSettings = useCallback((partial: Partial<UGCSettings>) => {
     setSettings((prev) => ({ ...prev, ...partial }));
@@ -90,6 +93,10 @@ export function UGCProvider({ children }: { children: React.ReactNode }) {
 
   const triggerGenerate = useCallback(() => {
     setGenerateTrigger((n) => n + 1);
+  }, []);
+
+  const triggerGenerateAllAngles = useCallback(() => {
+    setGenerateAllAnglesTrigger((n) => n + 1);
   }, []);
 
   return (
@@ -111,6 +118,8 @@ export function UGCProvider({ children }: { children: React.ReactNode }) {
         setIsGenerating,
         generateTrigger,
         triggerGenerate,
+        generateAllAnglesTrigger,
+        triggerGenerateAllAngles,
       }}
     >
       {children}

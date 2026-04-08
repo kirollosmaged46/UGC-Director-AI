@@ -108,7 +108,7 @@ function OptionChip({
 export default function DirectorScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { settings, updateSettings, productImageUri, triggerGenerate, setCurrentResult } = useUGC();
+  const { settings, updateSettings, productImageUri, triggerGenerate, triggerGenerateAllAngles, setCurrentResult } = useUGC();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -122,6 +122,17 @@ export default function DirectorScreen() {
     triggerGenerate();
     router.push("/(tabs)/generate");
   }, [productImageUri, triggerGenerate, setCurrentResult]);
+
+  const handleGenerateAllAngles = useCallback(() => {
+    if (!productImageUri) {
+      Alert.alert("No Product", "Please upload a product image first.");
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setCurrentResult(null);
+    triggerGenerateAllAngles();
+    router.push("/(tabs)/generate");
+  }, [productImageUri, triggerGenerateAllAngles, setCurrentResult]);
 
   const pick = useCallback(
     <K extends keyof typeof settings>(key: K, value: typeof settings[K]) => {
@@ -399,6 +410,18 @@ export default function DirectorScreen() {
             Generate Content
           </Text>
         </Pressable>
+        <Pressable
+          style={[
+            styles.allAnglesBtn,
+            { borderColor: colors.primary, borderRadius: colors.radius },
+          ]}
+          onPress={handleGenerateAllAngles}
+        >
+          <MaterialCommunityIcons name="compare" size={18} color={colors.primary} />
+          <Text style={[styles.allAnglesBtnText, { color: colors.primary }]}>
+            Generate All 3 Angles
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -467,4 +490,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   generateBtnText: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  allAnglesBtn: {
+    height: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    marginTop: 10,
+  },
+  allAnglesBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });

@@ -32,7 +32,7 @@ import Animated, {
   FadeInDown,
 } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
-import { useUGC, type GenerationResult, type GeneratedImage, type Hook } from "@/context/UGCContext";
+import { useUGC, type GenerationResult, type GeneratedImage, type Hook, type AdAngle } from "@/context/UGCContext";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const CARD_W = SCREEN_W - 40;
@@ -90,9 +90,11 @@ function PulsingDot({ color }: { color: string }) {
 function GeneratingView({
   colors,
   phase,
+  allAnglesMode,
 }: {
   colors: ReturnType<typeof useColors>;
   phase?: "photo" | "video";
+  allAnglesMode?: boolean;
 }) {
   const rotate = useSharedValue(0);
   useEffect(() => {
@@ -101,7 +103,18 @@ function GeneratingView({
   const rotateStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value}deg` }],
   }));
-  const titleText = phase === "video" ? "Generating video..." : phase === "photo" ? "Generating photos..." : "Generating...";
+  const titleText = allAnglesMode
+    ? "Generating all 3 angles..."
+    : phase === "video"
+    ? "Generating video..."
+    : phase === "photo"
+    ? "Generating photos..."
+    : "Generating...";
+  const hintText = allAnglesMode
+    ? "Us vs. Them · Before & After · Social Proof"
+    : phase === "video"
+    ? "3 AI scenes → ffmpeg render → ~45s"
+    : "Creating authentic UGC content...";
   return (
     <View style={styles.generatingContainer}>
       <Animated.View style={rotateStyle}>
@@ -116,9 +129,7 @@ function GeneratingView({
         <PulsingDot color={colors.primary} />
       </View>
       <Text style={[styles.generatingHint, { color: colors.mutedForeground }]}>
-        {phase === "video"
-          ? "3 AI scenes → ffmpeg render → ~45s"
-          : "Creating authentic UGC content..."}
+        {hintText}
       </Text>
     </View>
   );
@@ -248,6 +259,15 @@ function VideoCard({
   );
 }
 
+type AngleResult = { angle: AdAngle; label: string; images: GeneratedImage[] };
+
+const ANGLE_LABELS: Record<AdAngle, string> = {
+  "us-vs-them": "Us vs. Them",
+  "before-after": "Before & After",
+  "social-proof": "Social Proof",
+};
+const ALL_ANGLES: AdAngle[] = ["us-vs-them", "before-after", "social-proof"];
+
 export default function GenerateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -260,6 +280,7 @@ export default function GenerateScreen() {
     setCurrentResult,
     setIsGenerating,
     generateTrigger,
+    generateAllAnglesTrigger,
   } = useUGC();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -267,6 +288,9 @@ export default function GenerateScreen() {
   const [generatingHooks, setGeneratingHooks] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [allAnglesResults, setAllAnglesResults] = useState<AngleResult[] | null>(null);
+  const [activeAngleTab, setActiveAngleTab] = useState(0);
+  const [isAllAnglesLoading, setIsAllAnglesLoading] = useState(false);
   const isRunning = useRef(false);
 
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
@@ -422,12 +446,78 @@ export default function GenerateScreen() {
     [settings, creativeVision, baseUrl, addToHistory, setCurrentResult, setIsGenerating, fetchHooksData, productImageUri]
   );
 
+  const runGenerateAllAngles = useCallback(
+    async (imgUri: string) => {
+      if (isRunning.current) return;
+      isRunning.current = true;
+      setIsLoading(true);
+      setIsAllAnglesLoading(true);
+      setIsGenerating(true);
+      setAllAnglesResults(null);
+      setActiveAngleTab(0);
+      setCurrentResult(null);
+      setGeneratingPhase("photo");
+
+      try {
+        const base64 = await uriToBase64(imgUri);
+        type ApiResponse = {
+          images: Array<{ b64_json: string; index: number; aspectRatio?: string }>;
+        };
+
+        const angleRequests = ALL_ANGLES.map((angle) =>
+          fetch(`${baseUrl}/api/ugc/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageBase64: base64,
+              angle,
+              lighting: settings.lighting,
+              aspectRatio: settings.aspectRatio,
+              count: settings.count,
+              contentType: "photo",
+              platform: settings.platform,
+              creativeVision: creativeVision || undefined,
+            }),
+          }).then(async (resp) => {
+            if (!resp.ok) throw new Error(`Generate API error for angle ${angle}: ${resp.status}`);
+            const data = (await resp.json()) as ApiResponse;
+            if (!Array.isArray(data.images)) throw new Error("Malformed response");
+            return {
+              angle,
+              label: ANGLE_LABELS[angle],
+              images: data.images.map((img) => ({ b64_json: img.b64_json, index: img.index, hooks: [] })),
+            } satisfies AngleResult;
+          })
+        );
+
+        const results = await Promise.all(angleRequests);
+        setAllAnglesResults(results);
+      } catch (err) {
+        Alert.alert("Error", err instanceof Error ? err.message : "Generation failed");
+      } finally {
+        setIsLoading(false);
+        setIsAllAnglesLoading(false);
+        setGeneratingPhase(undefined);
+        setIsGenerating(false);
+        isRunning.current = false;
+      }
+    },
+    [settings, creativeVision, baseUrl, setCurrentResult, setIsGenerating]
+  );
+
   useEffect(() => {
     if (generateTrigger > 0 && productImageUri) {
+      setAllAnglesResults(null);
       setCurrentResult(null);
       void runGeneration(productImageUri);
     }
   }, [generateTrigger]);
+
+  useEffect(() => {
+    if (generateAllAnglesTrigger > 0 && productImageUri) {
+      void runGenerateAllAngles(productImageUri);
+    }
+  }, [generateAllAnglesTrigger]);
 
   const saveImage = useCallback(async (b64: string) => {
     if (Platform.OS === "web") {
@@ -465,8 +555,125 @@ export default function GenerateScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <GeneratingView colors={colors} phase={generatingPhase ?? (settings.contentType === "video" ? "video" : "photo")} />
+        <GeneratingView
+          colors={colors}
+          phase={generatingPhase ?? (settings.contentType === "video" ? "video" : "photo")}
+          allAnglesMode={isAllAnglesLoading}
+        />
       </View>
+    );
+  }
+
+  if (allAnglesResults) {
+    const activeResult = allAnglesResults[activeAngleTab];
+    return (
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={[styles.content, { paddingTop: topPad + 12, paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeInDown.duration(400)}>
+          <Text style={[styles.pageTitle, { color: colors.foreground }]}>All 3 Angles</Text>
+          <Text style={[styles.pageSub, { color: colors.mutedForeground }]}>
+            Compare results side by side
+          </Text>
+        </Animated.View>
+
+        <View style={[styles.angleTabs, { borderColor: colors.border }]}>
+          {allAnglesResults.map((r, i) => (
+            <Pressable
+              key={r.angle}
+              onPress={() => { setActiveAngleTab(i); setActiveImageIndex(0); Haptics.selectionAsync(); }}
+              style={[
+                styles.angleTab,
+                {
+                  backgroundColor: activeAngleTab === i ? colors.primary : "transparent",
+                  borderRadius: colors.radius - 2,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.angleTabText,
+                  { color: activeAngleTab === i ? colors.primaryForeground : colors.mutedForeground },
+                ]}
+                numberOfLines={1}
+              >
+                {r.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {activeResult && activeResult.images.length > 0 && (
+          <Animated.View entering={FadeIn.duration(300)}>
+            <FlatList
+              data={activeResult.images}
+              keyExtractor={(item) => `${activeResult.angle}-${item.index}`}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / CARD_W);
+                if (idx !== activeImageIndex) setActiveImageIndex(idx);
+              }}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    styles.imageCard,
+                    { width: CARD_W, backgroundColor: colors.card, borderRadius: colors.radius * 1.5, borderColor: colors.border },
+                  ]}
+                >
+                  <Image
+                    source={{ uri: `data:image/png;base64,${item.b64_json}` }}
+                    style={[styles.generatedImage, { height: imageHeight(settings.aspectRatio) }]}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.imageActions}>
+                    <Pressable
+                      style={[styles.actionBtn, { backgroundColor: colors.secondary, borderRadius: colors.radius }]}
+                      onPress={() => void saveImage(item.b64_json)}
+                    >
+                      <Ionicons name="download-outline" size={18} color={colors.foreground} />
+                      <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Save</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.actionBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+                      onPress={async () => {
+                        if (Platform.OS !== "web") {
+                          try {
+                            const fileUri = `${FileSystem.Paths.cache.uri}ugc_share_${Date.now()}.png`;
+                            await FileSystem.writeAsStringAsync(fileUri, item.b64_json, { encoding: "base64" });
+                            await Share.share({ url: fileUri });
+                          } catch { /* ignore */ }
+                        }
+                      }}
+                    >
+                      <Ionicons name="share-outline" size={18} color={colors.primaryForeground} />
+                      <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Share</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            />
+          </Animated.View>
+        )}
+
+        <Pressable
+          style={[styles.regenerateBtn, { borderColor: colors.primary, borderRadius: colors.radius }]}
+          onPress={() => {
+            if (productImageUri) {
+              setAllAnglesResults(null);
+              isRunning.current = false;
+              void runGenerateAllAngles(productImageUri);
+            }
+          }}
+        >
+          <MaterialCommunityIcons name="refresh" size={18} color={colors.primary} />
+          <Text style={[styles.regenerateBtnText, { color: colors.primary }]}>Regenerate All Angles</Text>
+        </Pressable>
+      </ScrollView>
     );
   }
 
@@ -767,4 +974,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   regenerateBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  angleTabs: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 3,
+    gap: 3,
+  },
+  angleTab: {
+    flex: 1,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  angleTabText: { fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
 });
