@@ -161,7 +161,7 @@ export default function HomeScreen() {
       <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.featuresRow}>
         {(
           [
-            { icon: "angle-acute", label: "6 Angles" },
+            { icon: "angle-acute", label: "3 Ad Angles" },
             { icon: "lightning-bolt", label: "5 Moods" },
             { icon: "brain", label: "AI Director" },
           ] as { icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"]; label: string }[]
