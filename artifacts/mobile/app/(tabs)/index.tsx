@@ -17,6 +17,7 @@ import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
+import { TAB_BAR_HEIGHT } from "./_layout";
 import { useUGC } from "@/context/UGCContext";
 
 export default function HomeScreen() {
@@ -73,7 +74,7 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 16, paddingBottom: insets.bottom + 24 }]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad + 16, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 }]}
       showsVerticalScrollIndicator={false}
     >
       <Animated.View entering={FadeInDown.duration(600).springify()}>

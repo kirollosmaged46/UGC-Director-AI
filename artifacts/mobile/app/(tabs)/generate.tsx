@@ -32,6 +32,7 @@ import Animated, {
   FadeInDown,
 } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
+import { TAB_BAR_HEIGHT } from "./_layout";
 import { useUGC, type GenerationResult, type GeneratedImage, type Hook, type AdAngle } from "@/context/UGCContext";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -570,7 +571,7 @@ export default function GenerateScreen() {
     return (
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={[styles.content, { paddingTop: topPad + 12, paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.content, { paddingTop: topPad + 12, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeInDown.duration(400)}>
@@ -700,7 +701,7 @@ export default function GenerateScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: topPad + 12, paddingBottom: insets.bottom + 24 },
+        { paddingTop: topPad + 12, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 },
       ]}
       showsVerticalScrollIndicator={false}
     >

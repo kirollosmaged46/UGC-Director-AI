@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
+import { TAB_BAR_HEIGHT } from "./_layout";
 import { useUGC } from "@/context/UGCContext";
 
 interface ChatMessage {
@@ -289,7 +290,7 @@ export default function ChatScreen() {
         style={[
           styles.inputArea,
           {
-            paddingBottom: insets.bottom + 8,
+            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8,
             borderTopColor: colors.border,
             backgroundColor: colors.background,
           },

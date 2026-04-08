@@ -16,6 +16,7 @@ import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
+import { TAB_BAR_HEIGHT } from "./_layout";
 import {
   useUGC,
   type AdAngle,
@@ -150,7 +151,7 @@ export default function DirectorScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: topPad + 16, paddingBottom: insets.bottom + 20 },
+          { paddingTop: topPad + 16, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 20 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -396,7 +397,7 @@ export default function DirectorScreen() {
           styles.footer,
           {
             backgroundColor: colors.background,
-            paddingBottom: insets.bottom + 8,
+            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8,
             borderTopColor: colors.border,
           },
         ]}

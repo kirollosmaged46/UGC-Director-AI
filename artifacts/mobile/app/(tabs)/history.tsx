@@ -12,6 +12,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
+import { TAB_BAR_HEIGHT } from "./_layout";
 import { useUGC, type GenerationResult } from "@/context/UGCContext";
 
 const VIDEO_URL_TTL_MS = 24 * 60 * 60 * 1000;
@@ -114,7 +115,7 @@ export default function HistoryScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.list,
-            { paddingTop: 16, paddingBottom: insets.bottom + 24 },
+            { paddingTop: 16, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 },
           ]}
           showsVerticalScrollIndicator={false}
         />
