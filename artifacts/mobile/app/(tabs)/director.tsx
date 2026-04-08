@@ -187,7 +187,7 @@ export default function DirectorScreen() {
               return (
                 <Pressable
                   key={a.id}
-                  onPress={() => { Haptics.selectionAsync(); pick("angle", a.id); }}
+                  onPress={() => pick("angle", a.id)}
                   style={[
                     styles.angleCard,
                     {

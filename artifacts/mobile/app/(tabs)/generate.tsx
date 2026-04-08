@@ -351,6 +351,9 @@ export default function GenerateScreen() {
           });
           if (!resp.ok) throw new Error(`Video generate API error: ${resp.status}`);
           const data = (await resp.json()) as ApiResponse;
+          if (!data.videoUrl) {
+            throw new Error("Video generation succeeded but no videoUrl was returned");
+          }
           videoUrl = data.videoUrl;
         }
 

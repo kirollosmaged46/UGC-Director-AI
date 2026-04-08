@@ -1,6 +1,6 @@
 import { Storage } from "@google-cloud/storage";
 import { randomUUID } from "crypto";
-import { writeFileSync } from "fs";
+import { writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -20,7 +20,13 @@ function buildGcsClient(): Storage {
   });
   const credPath = join(tmpdir(), `gcs-creds-${randomUUID()}.json`);
   writeFileSync(credPath, credContent, { mode: 0o600 });
-  return new Storage({ keyFilename: credPath, projectId: "" });
+  const client = new Storage({ keyFilename: credPath, projectId: "" });
+  try {
+    unlinkSync(credPath);
+  } catch {
+    // File cleanup is best-effort; the client has already read the credentials
+  }
+  return client;
 }
 
 const gcs = buildGcsClient();
