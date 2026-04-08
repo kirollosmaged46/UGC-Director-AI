@@ -107,7 +107,7 @@ function GeneratingView({
         <MaterialCommunityIcons name="creation" size={52} color={colors.primary} />
       </Animated.View>
       <Text style={[styles.generatingTitle, { color: colors.foreground }]}>
-        {isVideo ? "Producing Video" : "Generating"}
+        {isVideo ? "Generating video..." : "Generating"}
       </Text>
       <View style={styles.dotsRow}>
         <PulsingDot color={colors.primary} />
@@ -116,7 +116,7 @@ function GeneratingView({
       </View>
       <Text style={[styles.generatingHint, { color: colors.mutedForeground }]}>
         {isVideo
-          ? "Generating scenes + rendering mp4... ~45s"
+          ? "3 AI scenes → ffmpeg render → ~45s"
           : "Creating authentic UGC content..."}
       </Text>
     </View>

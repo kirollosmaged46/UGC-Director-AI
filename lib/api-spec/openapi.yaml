@@ -332,21 +332,6 @@ components:
               - b64_json
               - index
               - aspectRatio
-        videoConcepts:
-          type: array
-          items:
-            type: object
-            properties:
-              title:
-                type: string
-              storyboard:
-                type: string
-              index:
-                type: integer
-            required:
-              - title
-              - storyboard
-              - index
         videoUrl:
           type: string
           description: "Signed GCS URL for the generated .mp4 video (valid 24h). Present only when contentType=video."

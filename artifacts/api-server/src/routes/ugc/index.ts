@@ -286,7 +286,7 @@ Return ONLY valid JSON:
 
       const videoUrl = await uploadVideoAndGetUrl(videoPath);
 
-      res.json({ images: [], videoConcepts: [], videoUrl });
+      res.json({ images: [], videoUrl });
       return;
     }
 
@@ -301,7 +301,7 @@ Return ONLY valid JSON:
       });
     }
 
-    res.json({ images: generatedImages, videoConcepts: [], videoUrl: undefined });
+    res.json({ images: generatedImages });
   } catch (err) {
     req.log.error({ err }, "Failed to generate UGC content");
     res.status(500).json({ error: "Failed to generate UGC content" });

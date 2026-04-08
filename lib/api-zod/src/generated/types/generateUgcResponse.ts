@@ -6,11 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GenerateUgcResponseImagesItem } from "./generateUgcResponseImagesItem";
-import type { GenerateUgcResponseVideoConceptsItem } from "./generateUgcResponseVideoConceptsItem";
 
 export interface GenerateUgcResponse {
   images: GenerateUgcResponseImagesItem[];
-  videoConcepts?: GenerateUgcResponseVideoConceptsItem[];
   /** Signed GCS URL for the generated .mp4 video (valid 24h). Present only when contentType=video. */
   videoUrl?: string;
 }

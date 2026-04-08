@@ -148,15 +148,6 @@ export const GenerateUgcContentResponse = zod.object({
         .describe("Aspect ratio used for this image"),
     }),
   ),
-  videoConcepts: zod
-    .array(
-      zod.object({
-        title: zod.string(),
-        storyboard: zod.string(),
-        index: zod.number(),
-      }),
-    )
-    .optional(),
   videoUrl: zod
     .string()
     .optional()
