@@ -77,15 +77,14 @@ pnpm workspace monorepo:
 - ffmpeg is available system-wide at `/nix/store/.../bin/ffmpeg` — no npm package needed
 - Object storage sidecar at `http://127.0.0.1:1106` for auth + signed URLs
 
-## Mobile Workflow Status (FAILED is expected)
+## Mobile Workflow
 
-The `artifacts/mobile: expo` workflow always shows **FAILED** — this is a known Replit/Expo limitation:
-- Metro Bundler uses port **18115**, which is outside Replit's monitorable port range
-- `restart_workflow` always returns an error for this workflow after a 60-second timeout
-- Metro typically opens port 18115 in 30–60 seconds; after the timeout, Replit kills the process
-- **Do NOT** change `localPort` to a "supported" Replit port — it makes things worse
-- **Do NOT** call `restart_workflow` repeatedly (it keeps killing Metro)
-- Metro IS running briefly right after `restart_workflow` returns — check with `curl http://localhost:18115/status`
-- For Expo Go: scan the QR code from the mobile workflow logs immediately after `restart_workflow` is called
-- The Expo Go bundle is cached — once loaded, the app works even if Metro dies
-- If Metro is dead, call `restart_workflow` once (it will fail but Metro will be alive for ~5s) then scan quickly
+The `artifacts/mobile: expo` workflow now shows **RUNNING** correctly.
+
+**How it works:**
+- `scripts/dev-daemon.sh` starts Metro WITHOUT the `--localhost` flag, so Metro binds to all interfaces (`::`) not just `127.0.0.1`
+- This lets Replit's health check system reach port 18115 and mark the workflow RUNNING
+- Use `restart_workflow` to restart Metro when needed
+- Scan the QR code from the workflow logs with Expo Go to test on a real device
+
+**Do NOT add `--localhost` back** — it restricts Metro to `127.0.0.1` and breaks the workflow health check.
