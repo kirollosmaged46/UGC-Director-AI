@@ -100,15 +100,10 @@ export const generateUgcContentBodyCountMax = 3;
 export const GenerateUgcContentBody = zod.object({
   imageBase64: zod.string().describe("Base64-encoded product image"),
   angle: zod
-    .enum([
-      "eye-level",
-      "overhead",
-      "low-angle",
-      "dutch-tilt",
-      "close-up",
-      "wide",
-    ])
-    .describe("Camera angle directive"),
+    .enum(["us-vs-them", "before-after", "social-proof"])
+    .describe(
+      "Ad angle \/ narrative strategy: us-vs-them (competitive comparison), before-after (transformation), social-proof (community endorsement)",
+    ),
   lighting: zod
     .enum([
       "golden-hour",
@@ -125,9 +120,11 @@ export const GenerateUgcContentBody = zod.object({
     .number()
     .min(1)
     .max(generateUgcContentBodyCountMax)
-    .describe("Number of images to generate (1-3)"),
+    .describe(
+      "Number of images to generate (1-3). Ignored for video — always produces 1 video.",
+    ),
   contentType: zod
-    .enum(["photo", "video_concept"])
+    .enum(["photo", "video"])
     .describe(
       "Type of content. Note: 'both' is handled client-side by issuing two separate requests.",
     ),
@@ -160,6 +157,12 @@ export const GenerateUgcContentResponse = zod.object({
       }),
     )
     .optional(),
+  videoUrl: zod
+    .string()
+    .optional()
+    .describe(
+      "Signed GCS URL for the generated .mp4 video (valid 24h). Present only when contentType=video.",
+    ),
 });
 
 /**

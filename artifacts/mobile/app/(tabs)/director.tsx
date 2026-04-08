@@ -18,23 +18,34 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
 import {
   useUGC,
-  type CameraAngle,
+  type AdAngle,
   type LightingMood,
   type AspectRatio,
   type Platform as SocialPlatform,
   type ContentType,
 } from "@/context/UGCContext";
 
-type MCIcon = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 type IonicIcon = React.ComponentProps<typeof Ionicons>["name"];
 
-const ANGLES: { id: CameraAngle; label: string; icon: IonicIcon; desc: string }[] = [
-  { id: "eye-level", label: "Eye Level", icon: "eye-outline", desc: "Natural POV" },
-  { id: "overhead", label: "Flat Lay", icon: "arrow-down-circle-outline", desc: "Top down" },
-  { id: "low-angle", label: "Low Hero", icon: "arrow-up-outline", desc: "Power shot" },
-  { id: "dutch-tilt", label: "Dutch Tilt", icon: "swap-horizontal-outline", desc: "Dynamic" },
-  { id: "close-up", label: "Close Up", icon: "search-outline", desc: "Macro detail" },
-  { id: "wide", label: "Wide", icon: "expand-outline", desc: "Environmental" },
+const AD_ANGLES: { id: AdAngle; label: string; tagline: string; icon: IonicIcon }[] = [
+  {
+    id: "us-vs-them",
+    label: "Us vs. Them",
+    tagline: "Make the choice obvious",
+    icon: "swap-horizontal-outline",
+  },
+  {
+    id: "before-after",
+    label: "Before & After",
+    tagline: "Show the transformation",
+    icon: "trending-up-outline",
+  },
+  {
+    id: "social-proof",
+    label: "Social Proof",
+    tagline: "Everyone's already using it",
+    icon: "people-outline",
+  },
 ];
 
 const LIGHTING: { id: LightingMood; label: string; color: string; desc: string }[] = [
@@ -45,11 +56,11 @@ const LIGHTING: { id: LightingMood; label: string; color: string; desc: string }
   { id: "neon", label: "Neon", color: "#A855F7", desc: "Nightlife energy" },
 ];
 
-const RATIOS: { id: AspectRatio; label: string; ratio: string; desc: string }[] = [
-  { id: "9:16", label: "9:16", ratio: "9:16", desc: "TikTok / Reels" },
-  { id: "1:1", label: "1:1", ratio: "1:1", desc: "Square" },
-  { id: "4:5", label: "4:5", ratio: "4:5", desc: "Instagram" },
-  { id: "16:9", label: "16:9", ratio: "16:9", desc: "YouTube" },
+const RATIOS: { id: AspectRatio; label: string; desc: string }[] = [
+  { id: "9:16", label: "9:16", desc: "TikTok / Reels" },
+  { id: "1:1", label: "1:1", desc: "Square" },
+  { id: "4:5", label: "4:5", desc: "Instagram" },
+  { id: "16:9", label: "16:9", desc: "YouTube" },
 ];
 
 const PLATFORMS: { id: SocialPlatform; label: string; icon: IonicIcon }[] = [
@@ -60,8 +71,8 @@ const PLATFORMS: { id: SocialPlatform; label: string; icon: IonicIcon }[] = [
 
 const CONTENT_TYPES: { id: ContentType; label: string; icon: IonicIcon; desc: string }[] = [
   { id: "photo", label: "Photos", icon: "image-outline", desc: "Still images" },
-  { id: "video_concept", label: "Video Concept", icon: "film-outline", desc: "Storyboard" },
-  { id: "both", label: "Both", icon: "layers-outline", desc: "Photos + Concept" },
+  { id: "video", label: "Video", icon: "film-outline", desc: "Real mp4" },
+  { id: "both", label: "Both", icon: "layers-outline", desc: "Photos + Video" },
 ];
 
 function OptionChip({
@@ -169,46 +180,52 @@ export default function DirectorScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(150).duration(500)} style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CAMERA ANGLE</Text>
-          <View style={styles.grid}>
-            {ANGLES.map((a) => (
-              <OptionChip
-                key={a.id}
-                selected={settings.angle === a.id}
-                onPress={() => pick("angle", a.id)}
-                style={styles.angleChip}
-              >
-                <Ionicons
-                  name={a.icon}
-                  size={20}
-                  color={settings.angle === a.id ? colors.primaryForeground : colors.primary}
-                />
-                <Text
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>AD ANGLE</Text>
+          <View style={styles.angleGrid}>
+            {AD_ANGLES.map((a) => {
+              const selected = settings.angle === a.id;
+              return (
+                <Pressable
+                  key={a.id}
+                  onPress={() => { Haptics.selectionAsync(); pick("angle", a.id); }}
                   style={[
-                    styles.angleLabel,
+                    styles.angleCard,
                     {
-                      color:
-                        settings.angle === a.id ? colors.primaryForeground : colors.foreground,
+                      backgroundColor: selected ? colors.primary : colors.card,
+                      borderColor: selected ? colors.primary : colors.border,
+                      borderRadius: colors.radius * 1.5,
                     },
                   ]}
                 >
-                  {a.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.angleDesc,
-                    {
-                      color:
-                        settings.angle === a.id
-                          ? "rgba(255,255,255,0.7)"
-                          : colors.mutedForeground,
-                    },
-                  ]}
-                >
-                  {a.desc}
-                </Text>
-              </OptionChip>
-            ))}
+                  <View style={styles.angleCardTop}>
+                    <Ionicons
+                      name={a.icon}
+                      size={22}
+                      color={selected ? colors.primaryForeground : colors.primary}
+                    />
+                    {selected && (
+                      <Ionicons name="checkmark-circle" size={18} color={colors.primaryForeground} />
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.angleLabel,
+                      { color: selected ? colors.primaryForeground : colors.foreground },
+                    ]}
+                  >
+                    {a.label}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.angleTagline,
+                      { color: selected ? "rgba(255,255,255,0.75)" : colors.mutedForeground },
+                    ]}
+                  >
+                    {a.tagline}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </Animated.View>
 
@@ -231,9 +248,7 @@ export default function DirectorScreen() {
                     },
                   ]}
                 >
-                  <View
-                    style={[styles.lightingDot, { backgroundColor: l.color }]}
-                  />
+                  <View style={[styles.lightingDot, { backgroundColor: l.color }]} />
                   <Text
                     style={[
                       styles.lightingLabel,
@@ -398,19 +413,18 @@ const styles = StyleSheet.create({
   section: { gap: 10 },
   sectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2 },
   row: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 6 },
   chipLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
   platformChip: { flex: 1, justifyContent: "center" },
-  angleChip: {
-    width: "31%",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: 4,
-    padding: 12,
+  angleGrid: { gap: 10 },
+  angleCard: {
+    borderWidth: 1.5,
+    padding: 16,
+    gap: 6,
   },
-  angleLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  angleDesc: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  angleCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  angleLabel: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  angleTagline: { fontSize: 13, fontFamily: "Inter_400Regular" },
   hScroll: { marginHorizontal: -20, paddingHorizontal: 20 },
   hRow: { flexDirection: "row", gap: 10, paddingRight: 20 },
   lightingChip: {

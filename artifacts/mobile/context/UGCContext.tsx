@@ -1,21 +1,15 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 
-export type CameraAngle = "overhead" | "eye-level" | "low-angle" | "dutch-tilt" | "close-up" | "wide";
+export type AdAngle = "us-vs-them" | "before-after" | "social-proof";
 export type LightingMood = "golden-hour" | "studio-white" | "moody-dark" | "outdoor-natural" | "neon";
 export type AspectRatio = "9:16" | "1:1" | "4:5" | "16:9";
 export type Platform = "tiktok" | "instagram" | "youtube";
-export type ContentType = "photo" | "video_concept" | "both";
+export type ContentType = "photo" | "video" | "both";
 
 export interface GeneratedImage {
   b64_json: string;
   index: number;
   hooks: Hook[];
-}
-
-export interface VideoConcept {
-  title: string;
-  storyboard: string;
-  index: number;
 }
 
 export interface Hook {
@@ -27,9 +21,9 @@ export interface GenerationResult {
   id: string;
   productImageUri: string;
   images: GeneratedImage[];
-  videoConcepts: VideoConcept[];
+  videoUrl?: string;
   hooks: Hook[];
-  angle: CameraAngle;
+  angle: AdAngle;
   lighting: LightingMood;
   aspectRatio: AspectRatio;
   platform: Platform;
@@ -38,7 +32,7 @@ export interface GenerationResult {
 }
 
 export interface UGCSettings {
-  angle: CameraAngle;
+  angle: AdAngle;
   lighting: LightingMood;
   aspectRatio: AspectRatio;
   count: number;
@@ -68,7 +62,7 @@ interface UGCContextValue {
 const UGCContext = createContext<UGCContextValue | null>(null);
 
 const DEFAULT_SETTINGS: UGCSettings = {
-  angle: "eye-level",
+  angle: "social-proof",
   lighting: "golden-hour",
   aspectRatio: "9:16",
   count: 1,

@@ -14,5 +14,5 @@ export type GenerateUgcBodyContentType =
 
 export const GenerateUgcBodyContentType = {
   photo: "photo",
-  video_concept: "video_concept",
+  video: "video",
 } as const;

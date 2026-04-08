@@ -17,7 +17,7 @@ import { useUGC, type GenerationResult } from "@/context/UGCContext";
 function ResultCard({ item }: { item: GenerationResult }) {
   const colors = useColors();
   const firstImage = item.images[0];
-  const hasConcepts = item.videoConcepts.length > 0;
+  const hasVideo = !!item.videoUrl;
 
   return (
     <Animated.View
@@ -61,7 +61,7 @@ function ResultCard({ item }: { item: GenerationResult }) {
         </View>
         <Text style={[styles.cardMeta, { color: colors.mutedForeground }]}>
           {item.images.length} image{item.images.length !== 1 ? "s" : ""}
-          {hasConcepts ? ` + ${item.videoConcepts.length} concept` : ""}
+          {hasVideo ? " + 1 video" : ""}
           {" · "}
           {new Date(item.createdAt).toLocaleDateString()}
         </Text>

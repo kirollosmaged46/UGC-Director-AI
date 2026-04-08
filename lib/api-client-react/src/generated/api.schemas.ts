@@ -43,18 +43,15 @@ export interface OpenaiError {
 }
 
 /**
- * Camera angle directive
+ * Ad angle / narrative strategy: us-vs-them (competitive comparison), before-after (transformation), social-proof (community endorsement)
  */
 export type GenerateUgcBodyAngle =
   (typeof GenerateUgcBodyAngle)[keyof typeof GenerateUgcBodyAngle];
 
 export const GenerateUgcBodyAngle = {
-  "eye-level": "eye-level",
-  overhead: "overhead",
-  "low-angle": "low-angle",
-  "dutch-tilt": "dutch-tilt",
-  "close-up": "close-up",
-  wide: "wide",
+  "us-vs-them": "us-vs-them",
+  "before-after": "before-after",
+  "social-proof": "social-proof",
 } as const;
 
 /**
@@ -92,7 +89,7 @@ export type GenerateUgcBodyContentType =
 
 export const GenerateUgcBodyContentType = {
   photo: "photo",
-  video_concept: "video_concept",
+  video: "video",
 } as const;
 
 /**
@@ -110,14 +107,14 @@ export const GenerateUgcBodyPlatform = {
 export interface GenerateUgcBody {
   /** Base64-encoded product image */
   imageBase64: string;
-  /** Camera angle directive */
+  /** Ad angle / narrative strategy: us-vs-them (competitive comparison), before-after (transformation), social-proof (community endorsement) */
   angle: GenerateUgcBodyAngle;
   /** Lighting mood */
   lighting: GenerateUgcBodyLighting;
   /** Output aspect ratio */
   aspectRatio: GenerateUgcBodyAspectRatio;
   /**
-   * Number of images to generate (1-3)
+   * Number of images to generate (1-3). Ignored for video — always produces 1 video.
    * @minimum 1
    * @maximum 3
    */
@@ -159,6 +156,8 @@ export type GenerateUgcResponseVideoConceptsItem = {
 export interface GenerateUgcResponse {
   images: GenerateUgcResponseImagesItem[];
   videoConcepts?: GenerateUgcResponseVideoConceptsItem[];
+  /** Signed GCS URL for the generated .mp4 video (valid 24h). Present only when contentType=video. */
+  videoUrl?: string;
 }
 
 export type GenerateHooksBodyPlatform =

@@ -14,14 +14,14 @@ import type { GenerateUgcBodyPlatform } from "./generateUgcBodyPlatform";
 export interface GenerateUgcBody {
   /** Base64-encoded product image */
   imageBase64: string;
-  /** Camera angle directive */
+  /** Ad angle / narrative strategy: us-vs-them (competitive comparison), before-after (transformation), social-proof (community endorsement) */
   angle: GenerateUgcBodyAngle;
   /** Lighting mood */
   lighting: GenerateUgcBodyLighting;
   /** Output aspect ratio */
   aspectRatio: GenerateUgcBodyAspectRatio;
   /**
-   * Number of images to generate (1-3)
+   * Number of images to generate (1-3). Ignored for video — always produces 1 video.
    * @minimum 1
    * @maximum 3
    */

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,7 +32,7 @@ import Animated, {
   FadeInDown,
 } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
-import { useUGC, type GenerationResult, type GeneratedImage, type VideoConcept, type Hook } from "@/context/UGCContext";
+import { useUGC, type GenerationResult, type GeneratedImage, type Hook } from "@/context/UGCContext";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const CARD_W = SCREEN_W - 40;
@@ -61,10 +62,7 @@ async function uriToBase64(uri: string): Promise<string> {
       reader.readAsDataURL(blob);
     });
   }
-  const base64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: 'base64',
-  });
-  return base64;
+  return FileSystem.readAsStringAsync(uri, { encoding: "base64" });
 }
 
 function PulsingDot({ color }: { color: string }) {
@@ -81,12 +79,21 @@ function PulsingDot({ color }: { color: string }) {
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
     <Animated.View
-      style={[{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, marginHorizontal: 3 }, style]}
+      style={[
+        { width: 10, height: 10, borderRadius: 5, backgroundColor: color, marginHorizontal: 3 },
+        style,
+      ]}
     />
   );
 }
 
-function GeneratingView({ colors }: { colors: ReturnType<typeof useColors> }) {
+function GeneratingView({
+  colors,
+  isVideo,
+}: {
+  colors: ReturnType<typeof useColors>;
+  isVideo?: boolean;
+}) {
   const rotate = useSharedValue(0);
   useEffect(() => {
     rotate.value = withRepeat(withTiming(360, { duration: 2000, easing: Easing.linear }), -1);
@@ -99,16 +106,63 @@ function GeneratingView({ colors }: { colors: ReturnType<typeof useColors> }) {
       <Animated.View style={rotateStyle}>
         <MaterialCommunityIcons name="creation" size={52} color={colors.primary} />
       </Animated.View>
-      <Text style={[styles.generatingTitle, { color: colors.foreground }]}>Generating</Text>
+      <Text style={[styles.generatingTitle, { color: colors.foreground }]}>
+        {isVideo ? "Producing Video" : "Generating"}
+      </Text>
       <View style={styles.dotsRow}>
         <PulsingDot color={colors.primary} />
         <PulsingDot color={colors.accent} />
         <PulsingDot color={colors.primary} />
       </View>
       <Text style={[styles.generatingHint, { color: colors.mutedForeground }]}>
-        Creating authentic UGC content...
+        {isVideo
+          ? "Generating scenes + rendering mp4... ~45s"
+          : "Creating authentic UGC content..."}
       </Text>
     </View>
+  );
+}
+
+function VideoCard({
+  videoUrl,
+  aspectRatio,
+  colors,
+}: {
+  videoUrl: string;
+  aspectRatio: string;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const player = useVideoPlayer(videoUrl, (p) => {
+    p.loop = true;
+    p.play();
+  });
+
+  return (
+    <Animated.View entering={FadeIn.duration(600)} style={styles.videoCardWrapper}>
+      <View
+        style={[
+          styles.videoCard,
+          {
+            backgroundColor: colors.card,
+            borderRadius: colors.radius * 1.5,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <VideoView
+          player={player}
+          style={[styles.videoPlayer, { height: imageHeight(aspectRatio) }]}
+          allowsPictureInPicture
+          contentFit="cover"
+        />
+        <View style={[styles.videoBadge, { backgroundColor: colors.primary }]}>
+          <Ionicons name="film-outline" size={12} color={colors.primaryForeground} />
+          <Text style={[styles.videoBadgeText, { color: colors.primaryForeground }]}>
+            Real Video · ~12s
+          </Text>
+        </View>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -166,10 +220,19 @@ export default function GenerateScreen() {
       try {
         const base64 = await uriToBase64(imgUri);
 
-        type ApiResponse = { images: Array<{ b64_json: string; index: number }>; videoConcepts: VideoConcept[] };
-        const responses: ApiResponse[] = [];
+        type ApiResponse = {
+          images: Array<{ b64_json: string; index: number; aspectRatio?: string }>;
+          videoUrl?: string;
+        };
 
-        if (settings.contentType === "photo" || settings.contentType === "both") {
+        const allImages: GeneratedImage[] = [];
+        let videoUrl: string | undefined;
+
+        const isVideo = settings.contentType === "video";
+        const needsPhoto = settings.contentType === "photo" || settings.contentType === "both";
+        const needsVideo = settings.contentType === "video" || settings.contentType === "both";
+
+        if (needsPhoto) {
           const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -187,10 +250,10 @@ export default function GenerateScreen() {
           if (!resp.ok) throw new Error(`Generate API error: ${resp.status}`);
           const data = (await resp.json()) as ApiResponse;
           if (!Array.isArray(data.images)) throw new Error("Malformed generate response");
-          responses.push(data);
+          allImages.push(...data.images.map((img) => ({ b64_json: img.b64_json, index: img.index, hooks: [] })));
         }
 
-        if (settings.contentType === "video_concept" || settings.contentType === "both") {
+        if (needsVideo) {
           const resp = await fetch(`${baseUrl}/api/ugc/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -199,44 +262,46 @@ export default function GenerateScreen() {
               angle: settings.angle,
               lighting: settings.lighting,
               aspectRatio: settings.aspectRatio,
-              count: settings.count,
-              contentType: "video_concept",
+              count: 1,
+              contentType: "video",
               platform: settings.platform,
               creativeVision: creativeVision || undefined,
             }),
           });
-          if (!resp.ok) throw new Error(`Generate API error: ${resp.status}`);
+          if (!resp.ok) throw new Error(`Video generate API error: ${resp.status}`);
           const data = (await resp.json()) as ApiResponse;
-          if (!Array.isArray(data.images)) throw new Error("Malformed generate response");
-          responses.push(data);
+          videoUrl = data.videoUrl;
         }
 
-        const rawImages = responses.flatMap((r) => r.images ?? []);
-        const allConcepts = responses.flatMap((r) => r.videoConcepts ?? []);
-
-        setGeneratingHooks(true);
-        const perImageHooks = await Promise.all(
-          rawImages.map((_, i) =>
-            fetchHooksData(
-              `${creativeVision || "lifestyle product"} — image ${i + 1} of ${rawImages.length}`,
-              settings.platform
-            ).catch(() => [] as Hook[])
-          )
-        );
-        setGeneratingHooks(false);
-
-        const allImages: GeneratedImage[] = rawImages.map((img, i) => ({
-          b64_json: img.b64_json,
-          index: img.index,
-          hooks: perImageHooks[i] ?? [],
-        }));
+        let hooks: Hook[] = [];
+        if (allImages.length > 0) {
+          setGeneratingHooks(true);
+          const perImageHooks = await Promise.all(
+            allImages.map((_, i) =>
+              fetchHooksData(
+                `${creativeVision || "lifestyle product"} — image ${i + 1} of ${allImages.length}`,
+                settings.platform
+              ).catch(() => [] as Hook[])
+            )
+          );
+          setGeneratingHooks(false);
+          allImages.forEach((img, i) => { img.hooks = perImageHooks[i] ?? []; });
+          hooks = perImageHooks.flat();
+        } else if (isVideo) {
+          setGeneratingHooks(true);
+          hooks = await fetchHooksData(
+            creativeVision || "lifestyle product video",
+            settings.platform
+          ).catch(() => []);
+          setGeneratingHooks(false);
+        }
 
         const result: GenerationResult = {
           id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
           productImageUri: imgUri,
           images: allImages,
-          videoConcepts: allConcepts,
-          hooks: perImageHooks.flat(),
+          videoUrl,
+          hooks,
           angle: settings.angle,
           lighting: settings.lighting,
           aspectRatio: settings.aspectRatio,
@@ -254,7 +319,7 @@ export default function GenerateScreen() {
             text: "Retry",
             onPress: () => {
               isRunning.current = false;
-              if (productImageUri) runGeneration(productImageUri);
+              if (productImageUri) void runGeneration(productImageUri);
             },
           },
           { text: "Dismiss" },
@@ -265,22 +330,13 @@ export default function GenerateScreen() {
         isRunning.current = false;
       }
     },
-    [
-      settings,
-      creativeVision,
-      baseUrl,
-      addToHistory,
-      setCurrentResult,
-      setIsGenerating,
-      fetchHooksData,
-      productImageUri,
-    ]
+    [settings, creativeVision, baseUrl, addToHistory, setCurrentResult, setIsGenerating, fetchHooksData, productImageUri]
   );
 
   useEffect(() => {
     if (generateTrigger > 0 && productImageUri) {
       setCurrentResult(null);
-      runGeneration(productImageUri);
+      void runGeneration(productImageUri);
     }
   }, [generateTrigger]);
 
@@ -296,9 +352,7 @@ export default function GenerateScreen() {
         return;
       }
       const fileUri = `${FileSystem.Paths.cache.uri}ugc_${Date.now()}.png`;
-      await FileSystem.writeAsStringAsync(fileUri, b64, {
-        encoding: 'base64',
-      });
+      await FileSystem.writeAsStringAsync(fileUri, b64, { encoding: "base64" });
       await MediaLibrary.saveToLibraryAsync(fileUri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Saved", "Image saved to your camera roll.");
@@ -322,7 +376,7 @@ export default function GenerateScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <GeneratingView colors={colors} />
+        <GeneratingView colors={colors} isVideo={settings.contentType !== "photo"} />
       </View>
     );
   }
@@ -339,20 +393,28 @@ export default function GenerateScreen() {
     );
   }
 
+  const hooksSource =
+    currentResult.images.length > 0
+      ? (currentResult.images[activeImageIndex]?.hooks ?? [])
+      : currentResult.hooks;
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 12, paddingBottom: insets.bottom + 24 }]}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: topPad + 12, paddingBottom: insets.bottom + 24 },
+      ]}
       showsVerticalScrollIndicator={false}
     >
       <Animated.View entering={FadeInDown.duration(400)}>
         <Text style={[styles.pageTitle, { color: colors.foreground }]}>Your Content</Text>
         <Text style={[styles.pageSub, { color: colors.mutedForeground }]}>
-          {currentResult.images.length} photo
-          {currentResult.images.length !== 1 ? "s" : ""}
-          {currentResult.videoConcepts.length > 0
-            ? ` + ${currentResult.videoConcepts.length} video concept${currentResult.videoConcepts.length !== 1 ? "s" : ""}`
-            : ""}
+          {currentResult.images.length > 0
+            ? `${currentResult.images.length} photo${currentResult.images.length !== 1 ? "s" : ""}${currentResult.videoUrl ? " + 1 video" : ""}`
+            : currentResult.videoUrl
+            ? "1 video · ~12 seconds"
+            : "Ready"}
         </Text>
       </Animated.View>
 
@@ -397,20 +459,26 @@ export default function GenerateScreen() {
                 />
                 <View style={styles.imageActions}>
                   <Pressable
-                    style={[styles.actionBtn, { backgroundColor: colors.secondary, borderRadius: colors.radius }]}
-                    onPress={() => saveImage(item.b64_json)}
+                    style={[
+                      styles.actionBtn,
+                      { backgroundColor: colors.secondary, borderRadius: colors.radius },
+                    ]}
+                    onPress={() => void saveImage(item.b64_json)}
                   >
                     <Ionicons name="download-outline" size={18} color={colors.foreground} />
                     <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Save</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.actionBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+                    style={[
+                      styles.actionBtn,
+                      { backgroundColor: colors.primary, borderRadius: colors.radius },
+                    ]}
                     onPress={async () => {
                       if (Platform.OS !== "web") {
                         try {
                           const fileUri = `${FileSystem.Paths.cache.uri}ugc_share_${Date.now()}.png`;
                           await FileSystem.writeAsStringAsync(fileUri, item.b64_json, {
-                            encoding: 'base64',
+                            encoding: "base64",
                           });
                           await Share.share({ url: fileUri });
                         } catch {
@@ -420,7 +488,9 @@ export default function GenerateScreen() {
                     }}
                   >
                     <Ionicons name="share-outline" size={18} color={colors.primaryForeground} />
-                    <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Share</Text>
+                    <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>
+                      Share
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -445,41 +515,28 @@ export default function GenerateScreen() {
         </Animated.View>
       )}
 
-      {currentResult.videoConcepts.map((vc, i) => (
-        <Animated.View
-          key={vc.index}
-          entering={FadeInDown.delay(200 + i * 100).duration(400)}
-          style={[
-            styles.conceptCard,
-            {
-              backgroundColor: colors.card,
-              borderRadius: colors.radius * 1.5,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <View style={styles.conceptHeader}>
-            <MaterialCommunityIcons name="video-outline" size={20} color={colors.primary} />
-            <Text style={[styles.conceptTitle, { color: colors.foreground }]}>{vc.title}</Text>
-          </View>
-          <Text style={[styles.conceptBody, { color: colors.mutedForeground }]}>{vc.storyboard}</Text>
-        </Animated.View>
-      ))}
+      {currentResult.videoUrl && (
+        <VideoCard
+          videoUrl={currentResult.videoUrl}
+          aspectRatio={currentResult.aspectRatio}
+          colors={colors}
+        />
+      )}
 
       <Animated.View entering={FadeInDown.delay(400).duration(400)} style={styles.hooksSection}>
         <View style={styles.hooksTitleRow}>
           <Text style={[styles.hooksTitle, { color: colors.foreground }]}>
-            Hooks {currentResult.images.length > 1 ? `· Image ${activeImageIndex + 1}` : ""}
+            Hooks{currentResult.images.length > 1 ? ` · Image ${activeImageIndex + 1}` : ""}
           </Text>
           {generatingHooks && <ActivityIndicator size="small" color={colors.primary} />}
         </View>
         <Text style={[styles.hooksSub, { color: colors.mutedForeground }]}>
           Scroll-stopping captions for {currentResult.platform}
         </Text>
-        {(currentResult.images[activeImageIndex]?.hooks ?? []).map((hook, i) => (
+        {hooksSource.map((hook, i) => (
           <Pressable
             key={i}
-            onPress={() => copyHook(hook.text, i)}
+            onPress={() => void copyHook(hook.text, i)}
             style={[
               styles.hookItem,
               {
@@ -497,8 +554,13 @@ export default function GenerateScreen() {
             />
           </Pressable>
         ))}
-        {!generatingHooks && (currentResult.images[activeImageIndex]?.hooks ?? []).length === 0 && (
-          <View style={[styles.emptyHooks, { backgroundColor: colors.card, borderRadius: colors.radius }]}>
+        {!generatingHooks && hooksSource.length === 0 && (
+          <View
+            style={[
+              styles.emptyHooks,
+              { backgroundColor: colors.card, borderRadius: colors.radius },
+            ]}
+          >
             <Text style={[styles.emptyHooksText, { color: colors.mutedForeground }]}>
               Hooks will appear here once generated
             </Text>
@@ -507,12 +569,15 @@ export default function GenerateScreen() {
       </Animated.View>
 
       <Pressable
-        style={[styles.regenerateBtn, { borderColor: colors.primary, borderRadius: colors.radius }]}
+        style={[
+          styles.regenerateBtn,
+          { borderColor: colors.primary, borderRadius: colors.radius },
+        ]}
         onPress={() => {
           if (productImageUri) {
             setCurrentResult(null);
             isRunning.current = false;
-            runGeneration(productImageUri);
+            void runGeneration(productImageUri);
           }
         }}
       >
@@ -547,7 +612,13 @@ const styles = StyleSheet.create({
   generatingHint: { fontSize: 14, fontFamily: "Inter_400Regular" },
   imageCard: { borderWidth: 1, overflow: "hidden" },
   generatedImage: { width: "100%" },
-  paginationDots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, paddingTop: 10 },
+  paginationDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    paddingTop: 10,
+  },
   dot: { height: 6, borderRadius: 3 },
   imageActions: { flexDirection: "row", gap: 10, padding: 12 },
   actionBtn: {
@@ -559,10 +630,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  conceptCard: { borderWidth: 1, padding: 16, gap: 10 },
-  conceptHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  conceptTitle: { fontSize: 16, fontFamily: "Inter_700Bold", flex: 1 },
-  conceptBody: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  videoCardWrapper: { gap: 0 },
+  videoCard: { borderWidth: 1, overflow: "hidden", position: "relative" },
+  videoPlayer: { width: "100%" },
+  videoBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  videoBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   hooksSection: { gap: 10 },
   hooksTitleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   hooksTitle: { fontSize: 22, fontFamily: "Inter_700Bold", flex: 1 },

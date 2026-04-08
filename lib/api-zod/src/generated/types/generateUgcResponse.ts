@@ -11,4 +11,6 @@ import type { GenerateUgcResponseVideoConceptsItem } from "./generateUgcResponse
 export interface GenerateUgcResponse {
   images: GenerateUgcResponseImagesItem[];
   videoConcepts?: GenerateUgcResponseVideoConceptsItem[];
+  /** Signed GCS URL for the generated .mp4 video (valid 24h). Present only when contentType=video. */
+  videoUrl?: string;
 }

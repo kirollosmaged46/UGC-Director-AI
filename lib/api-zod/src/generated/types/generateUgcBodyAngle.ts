@@ -7,16 +7,13 @@
  */
 
 /**
- * Camera angle directive
+ * Ad angle / narrative strategy: us-vs-them (competitive comparison), before-after (transformation), social-proof (community endorsement)
  */
 export type GenerateUgcBodyAngle =
   (typeof GenerateUgcBodyAngle)[keyof typeof GenerateUgcBodyAngle];
 
 export const GenerateUgcBodyAngle = {
-  "eye-level": "eye-level",
-  overhead: "overhead",
-  "low-angle": "low-angle",
-  "dutch-tilt": "dutch-tilt",
-  "close-up": "close-up",
-  wide: "wide",
+  "us-vs-them": "us-vs-them",
+  "before-after": "before-after",
+  "social-proof": "social-proof",
 } as const;
