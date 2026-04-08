@@ -16,6 +16,7 @@ import {
   NativeScrollEvent,
 } from "react-native";
 import * as FileSystem from "expo-file-system";
+import { readAsStringAsync, EncodingType } from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -63,7 +64,7 @@ async function uriToBase64(uri: string): Promise<string> {
       reader.readAsDataURL(blob);
     });
   }
-  return FileSystem.readAsStringAsync(uri, { encoding: "base64" });
+  return readAsStringAsync(uri, { encoding: EncodingType.Base64 });
 }
 
 function PulsingDot({ color }: { color: string }) {
@@ -269,6 +270,12 @@ const ANGLE_LABELS: Record<AdAngle, string> = {
 };
 const ALL_ANGLES: AdAngle[] = ["us-vs-them", "before-after", "social-proof"];
 
+const WIDE_VARIANT_LIGHTING: Record<AdAngle, string> = {
+  "us-vs-them": "studio-white",
+  "before-after": "golden-hour",
+  "social-proof": "outdoor-natural",
+};
+
 export default function GenerateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -473,9 +480,9 @@ export default function GenerateScreen() {
             body: JSON.stringify({
               imageBase64: base64,
               angle,
-              lighting: settings.lighting,
+              lighting: WIDE_VARIANT_LIGHTING[angle],
               aspectRatio: settings.aspectRatio,
-              count: settings.count,
+              count: 1,
               contentType: "photo",
               platform: settings.platform,
               creativeVision: creativeVision || undefined,

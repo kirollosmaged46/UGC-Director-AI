@@ -14,7 +14,8 @@ import {
 import { fetch } from "expo/fetch";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
+import * as VideoThumbnails from "expo-video-thumbnails";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -68,6 +69,8 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [referenceUri, setReferenceUri] = useState<string | null>(null);
+  const [referenceIsVideo, setReferenceIsVideo] = useState(false);
+  const [referenceThumbnailUri, setReferenceThumbnailUri] = useState<string | null>(null);
   const [isPickingRef, setIsPickingRef] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
@@ -87,20 +90,34 @@ export default function ChatScreen() {
       setIsPickingRef(true);
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission needed", "Allow photo library access to share a reference.");
+        Alert.alert("Permission needed", "Allow photo & video library access to share a reference.");
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: "images",
+        mediaTypes: ["images", "videos"],
         quality: 0.8,
         allowsEditing: false,
+        videoMaxDuration: 120,
       });
       if (!result.canceled && result.assets[0]) {
-        setReferenceUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        const isVideo = asset.type === "video";
+        setReferenceUri(asset.uri);
+        setReferenceIsVideo(isVideo);
+        if (isVideo) {
+          try {
+            const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 0 });
+            setReferenceThumbnailUri(thumbUri);
+          } catch {
+            setReferenceThumbnailUri(null);
+          }
+        } else {
+          setReferenceThumbnailUri(null);
+        }
         Haptics.selectionAsync();
       }
     } catch {
-      Alert.alert("Error", "Could not pick reference image.");
+      Alert.alert("Error", "Could not pick reference media.");
     } finally {
       setIsPickingRef(false);
     }
@@ -108,6 +125,8 @@ export default function ChatScreen() {
 
   const clearReference = useCallback(() => {
     setReferenceUri(null);
+    setReferenceIsVideo(false);
+    setReferenceThumbnailUri(null);
     Haptics.selectionAsync();
   }, []);
 
@@ -116,8 +135,12 @@ export default function ChatScreen() {
 
     const userText = input.trim();
     const sendRef = referenceUri;
+    const sendIsVideo = referenceIsVideo;
+    const sendThumb = referenceThumbnailUri;
     setInput("");
     setReferenceUri(null);
+    setReferenceIsVideo(false);
+    setReferenceThumbnailUri(null);
     setIsSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -125,7 +148,7 @@ export default function ChatScreen() {
       id: Date.now().toString() + "u",
       role: "user",
       content: userText,
-      referenceUri: sendRef ?? undefined,
+      referenceUri: sendIsVideo ? (sendThumb ?? sendRef ?? undefined) : (sendRef ?? undefined),
     };
     setMessages((prev) => [userMsg, ...prev]);
 
@@ -138,9 +161,10 @@ export default function ChatScreen() {
 
       let refB64: string | undefined;
       let refMime: string | undefined;
-      if (sendRef) {
+      const refSourceUri = sendIsVideo ? (sendThumb ?? sendRef) : sendRef;
+      if (refSourceUri) {
         try {
-          const { b64, mime } = await uriToBase64(sendRef);
+          const { b64, mime } = await uriToBase64(refSourceUri);
           refB64 = b64;
           refMime = mime;
         } catch {
@@ -298,14 +322,25 @@ export default function ChatScreen() {
       >
         {referenceUri && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.refPreviewRow}>
-            <Image
-              source={{ uri: referenceUri }}
-              style={[styles.refPreview, { borderRadius: colors.radius }]}
-              resizeMode="cover"
-            />
+            <View style={{ position: "relative" }}>
+              <Image
+                source={{ uri: referenceThumbnailUri ?? referenceUri }}
+                style={[styles.refPreview, { borderRadius: colors.radius }]}
+                resizeMode="cover"
+              />
+              {referenceIsVideo && (
+                <View style={[styles.videoBadge, { backgroundColor: "rgba(0,0,0,0.65)" }]}>
+                  <Ionicons name="play" size={10} color="#fff" />
+                </View>
+              )}
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.refPreviewLabel, { color: colors.foreground }]}>Reference attached</Text>
-              <Text style={[styles.refPreviewSub, { color: colors.mutedForeground }]}>AI will analyze this image</Text>
+              <Text style={[styles.refPreviewLabel, { color: colors.foreground }]}>
+                {referenceIsVideo ? "Video reference attached" : "Reference attached"}
+              </Text>
+              <Text style={[styles.refPreviewSub, { color: colors.mutedForeground }]}>
+                {referenceIsVideo ? "AI will analyze a frame from this video" : "AI will analyze this image"}
+              </Text>
             </View>
             <Pressable onPress={clearReference} hitSlop={8}>
               <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
@@ -333,7 +368,7 @@ export default function ChatScreen() {
               <ActivityIndicator size="small" color={colors.mutedForeground} />
             ) : (
               <Ionicons
-                name={referenceUri ? "image" : "image-outline"}
+                name={referenceIsVideo ? "videocam" : referenceUri ? "image" : "image-outline"}
                 size={22}
                 color={referenceUri ? colors.primary : colors.mutedForeground}
               />
@@ -414,6 +449,16 @@ const styles = StyleSheet.create({
   refPreview: {
     width: 48,
     height: 48,
+  },
+  videoBadge: {
+    position: "absolute",
+    bottom: 3,
+    right: 3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
   },
   refPreviewLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   refPreviewSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
