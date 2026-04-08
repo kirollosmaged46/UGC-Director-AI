@@ -18,15 +18,14 @@ function buildGcsClient(): Storage {
     },
     universe_domain: "googleapis.com",
   });
+  // GCS client reads keyFilename lazily on first auth request, so the file
+  // must remain on disk. Schedule cleanup at process exit.
   const credPath = join(tmpdir(), `gcs-creds-${randomUUID()}.json`);
   writeFileSync(credPath, credContent, { mode: 0o600 });
-  const client = new Storage({ keyFilename: credPath, projectId: "" });
-  try {
-    unlinkSync(credPath);
-  } catch {
-    // File cleanup is best-effort; the client has already read the credentials
-  }
-  return client;
+  process.once("exit", () => {
+    try { unlinkSync(credPath); } catch { /* ignore */ }
+  });
+  return new Storage({ keyFilename: credPath, projectId: "" });
 }
 
 const gcs = buildGcsClient();
