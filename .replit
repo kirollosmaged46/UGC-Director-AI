@@ -51,7 +51,7 @@ task = "shell.exec"
 args = "pnpm --filter @workspace/mobile run dev"
 
 [workflows.workflow.metadata]
-outputType = "console"
+outputType = "webview"
 
 [agent]
 stack = "PNPM_WORKSPACE"
