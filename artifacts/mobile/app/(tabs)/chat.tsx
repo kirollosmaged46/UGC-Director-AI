@@ -18,9 +18,6 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
 import { useUGC } from "@/context/UGCContext";
-import { setBaseUrl } from "@workspace/api-client-react";
-
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
 
 interface ChatMessage {
   id: string;
@@ -44,7 +41,6 @@ export default function ChatScreen() {
   ]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
   const inputRef = useRef<TextInput>(null);
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 

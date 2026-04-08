@@ -233,7 +233,7 @@ router.post("/hooks", async (req, res) => {
       messages: [
         {
           role: "user",
-          content: `You are an elite UGC content strategist. Generate 5 scroll-stopping hooks/captions for ${platformGuide}.
+          content: `You are an elite UGC content strategist. Generate ${count} scroll-stopping hooks/captions for ${platformGuide}.
 
 Product: ${productDescription}
 Tone: ${tone}
