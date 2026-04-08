@@ -8,6 +8,7 @@ import { createReadStream } from "fs";
 import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
+import sharp from "sharp";
 import { videoStorage } from "../../lib/videoStorage";
 import { AD_ANGLE_ENUM, type AdAngle, ModelConceptSchema, buildUgcPrompt } from "./helpers.js";
 
@@ -48,19 +49,19 @@ function ffmpegDimensions(ratio: string): { w: number; h: number } {
   return { w: 1024, h: 1024 };
 }
 
-function detectImageMime(buf: Buffer): { mimeType: string; ext: string } {
-  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) return { mimeType: "image/jpeg", ext: "jpg" };
-  if (buf.length >= 4 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46) return { mimeType: "image/webp", ext: "webp" };
-  return { mimeType: "image/png", ext: "png" };
+async function normalizeToRgbaPng(inputBuffer: Buffer): Promise<Buffer> {
+  return sharp(inputBuffer)
+    .ensureAlpha()
+    .png({ compressionLevel: 6 })
+    .toBuffer();
 }
 
 async function editProductImage(
   imagePath: string,
-  mimeType: string,
   prompt: string,
   size: ImageEditSize = "1024x1024"
 ): Promise<Buffer> {
-  const fileObj = await toFile(createReadStream(imagePath), `product.${mimeType.split("/")[1]}`, { type: mimeType });
+  const fileObj = await toFile(createReadStream(imagePath), "product.png", { type: "image/png" });
   const response = (await openai.images.edit({
     model: "gpt-image-1",
     image: fileObj,
@@ -148,11 +149,11 @@ router.post("/generate", async (req, res) => {
   const tmpFiles: string[] = [];
 
   try {
-    const imageBuffer = Buffer.from(imageBase64, "base64");
-    const { mimeType, ext } = detectImageMime(imageBuffer);
+    const rawBuffer = Buffer.from(imageBase64, "base64");
+    const pngBuffer = await normalizeToRgbaPng(rawBuffer);
     const tmpDir = os.tmpdir();
-    const productPath = path.join(tmpDir, `ugc-product-${randomUUID()}.${ext}`);
-    await writeFile(productPath, imageBuffer);
+    const productPath = path.join(tmpDir, `ugc-product-${randomUUID()}.png`);
+    await writeFile(productPath, pngBuffer);
     tmpFiles.push(productPath);
 
     if (contentType === "video") {
@@ -217,7 +218,7 @@ Return ONLY valid JSON:
               creativeVision,
               sceneContext: scene.description,
             });
-            const buf = await editProductImage(productPath, mimeType, scenePrompt, aspectRatioToSize(aspectRatio));
+            const buf = await editProductImage(productPath, scenePrompt, aspectRatioToSize(aspectRatio));
             const kfPath = path.join(tmpDir, `ugc-kf-${randomUUID()}.png`);
             await writeFile(kfPath, buf);
             tmpFiles.push(kfPath);
@@ -243,7 +244,7 @@ Return ONLY valid JSON:
     const generatedImages = [];
     for (let i = 0; i < count; i++) {
       const prompt = buildUgcPrompt({ angle, lighting, aspectRatio, platform, creativeVision });
-      const editedBuffer = await editProductImage(productPath, mimeType, prompt, aspectRatioToSize(aspectRatio));
+      const editedBuffer = await editProductImage(productPath, prompt, aspectRatioToSize(aspectRatio));
       generatedImages.push({
         b64_json: editedBuffer.toString("base64"),
         index: i,
