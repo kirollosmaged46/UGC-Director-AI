@@ -76,3 +76,16 @@ pnpm workspace monorepo:
 - `editImages()` from `@workspace/integrations-openai-ai-server` takes file paths (not base64)
 - ffmpeg is available system-wide at `/nix/store/.../bin/ffmpeg` — no npm package needed
 - Object storage sidecar at `http://127.0.0.1:1106` for auth + signed URLs
+
+## Mobile Workflow Status (FAILED is expected)
+
+The `artifacts/mobile: expo` workflow always shows **FAILED** — this is a known Replit/Expo limitation:
+- Metro Bundler uses port **18115**, which is outside Replit's monitorable port range
+- `restart_workflow` always returns an error for this workflow after a 60-second timeout
+- Metro typically opens port 18115 in 30–60 seconds; after the timeout, Replit kills the process
+- **Do NOT** change `localPort` to a "supported" Replit port — it makes things worse
+- **Do NOT** call `restart_workflow` repeatedly (it keeps killing Metro)
+- Metro IS running briefly right after `restart_workflow` returns — check with `curl http://localhost:18115/status`
+- For Expo Go: scan the QR code from the mobile workflow logs immediately after `restart_workflow` is called
+- The Expo Go bundle is cached — once loaded, the app works even if Metro dies
+- If Metro is dead, call `restart_workflow` once (it will fail but Metro will be alive for ~5s) then scan quickly

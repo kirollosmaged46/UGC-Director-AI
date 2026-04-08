@@ -15,8 +15,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
-import * as FileSystem from "expo-file-system";
-import { readAsStringAsync, EncodingType } from "expo-file-system/legacy";
+import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -64,7 +63,7 @@ async function uriToBase64(uri: string): Promise<string> {
       reader.readAsDataURL(blob);
     });
   }
-  return readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+  return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 }
 
 function PulsingDot({ color }: { color: string }) {
@@ -174,7 +173,7 @@ function VideoCard({
         Alert.alert("Permission needed", "Allow media library access to save videos.");
         return;
       }
-      const fileUri = `${FileSystem.Paths.cache.uri}ugc_video_${Date.now()}.mp4`;
+      const fileUri = `${FileSystem.cacheDirectory ?? ""}ugc_video_${Date.now()}.mp4`;
       const result = await FileSystem.downloadAsync(videoUrl, fileUri);
       await MediaLibrary.saveToLibraryAsync(result.uri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -192,7 +191,7 @@ function VideoCard({
       return;
     }
     try {
-      const fileUri = `${FileSystem.Paths.cache.uri}ugc_share_video_${Date.now()}.mp4`;
+      const fileUri = `${FileSystem.cacheDirectory ?? ""}ugc_share_video_${Date.now()}.mp4`;
       const result = await FileSystem.downloadAsync(videoUrl, fileUri);
       await Share.share({ url: result.uri });
     } catch {
@@ -539,7 +538,7 @@ export default function GenerateScreen() {
         Alert.alert("Permission needed", "Allow media library access to save images.");
         return;
       }
-      const fileUri = `${FileSystem.Paths.cache.uri}ugc_${Date.now()}.png`;
+      const fileUri = `${FileSystem.cacheDirectory ?? ""}ugc_${Date.now()}.png`;
       await FileSystem.writeAsStringAsync(fileUri, b64, { encoding: "base64" });
       await MediaLibrary.saveToLibraryAsync(fileUri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -652,7 +651,7 @@ export default function GenerateScreen() {
                       onPress={async () => {
                         if (Platform.OS !== "web") {
                           try {
-                            const fileUri = `${FileSystem.Paths.cache.uri}ugc_share_${Date.now()}.png`;
+                            const fileUri = `${FileSystem.cacheDirectory ?? ""}ugc_share_${Date.now()}.png`;
                             await FileSystem.writeAsStringAsync(fileUri, item.b64_json, { encoding: "base64" });
                             await Share.share({ url: fileUri });
                           } catch { /* ignore */ }
@@ -781,7 +780,7 @@ export default function GenerateScreen() {
                     onPress={async () => {
                       if (Platform.OS !== "web") {
                         try {
-                          const fileUri = `${FileSystem.Paths.cache.uri}ugc_share_${Date.now()}.png`;
+                          const fileUri = `${FileSystem.cacheDirectory ?? ""}ugc_share_${Date.now()}.png`;
                           await FileSystem.writeAsStringAsync(fileUri, item.b64_json, {
                             encoding: "base64",
                           });
