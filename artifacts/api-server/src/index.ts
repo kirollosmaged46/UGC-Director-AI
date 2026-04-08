@@ -2,6 +2,8 @@ import { execFileSync } from "child_process";
 import app from "./app";
 import { logger } from "./lib/logger";
 
+const SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+
 function validateEnvironment(): void {
   const missing: string[] = [];
 
@@ -22,6 +24,23 @@ function validateEnvironment(): void {
       "Required environment variables for video generation are not set. " +
       "Provision object storage via the Replit Object Storage tool to enable video output."
     );
+  }
+}
+
+async function probeSidecar(): Promise<void> {
+  try {
+    const res = await fetch(`${SIDECAR_ENDPOINT}/credential`, {
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!res.ok) {
+      logger.warn({ status: res.status },
+        "Object storage sidecar responded with non-OK status — video upload may fail at runtime.");
+    } else {
+      logger.info("Object storage sidecar reachable");
+    }
+  } catch (err) {
+    logger.warn({ err },
+      "Object storage sidecar unreachable — video generation/upload will fail until the sidecar is available.");
   }
 }
 
@@ -48,4 +67,5 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  void probeSidecar();
 });
