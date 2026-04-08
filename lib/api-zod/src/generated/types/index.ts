@@ -19,6 +19,7 @@ export * from "./generateUgcBodyLighting";
 export * from "./generateUgcBodyPlatform";
 export * from "./generateUgcResponse";
 export * from "./generateUgcResponseImagesItem";
+export * from "./generateUgcResponseImagesItemAspectRatio";
 export * from "./generateUgcResponseVideoConceptsItem";
 export * from "./healthStatus";
 export * from "./openaiConversation";

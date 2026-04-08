@@ -165,7 +165,7 @@ Format as valid JSON only: { "title": "short catchy video title max 8 words", "s
 
           return {
             concept: { ...concept, index: i },
-            image: { b64_json: keyframeBuffer.toString("base64"), index: i },
+            image: { b64_json: keyframeBuffer.toString("base64"), index: i, aspectRatio },
           };
         })
       );

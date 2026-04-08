@@ -146,6 +146,9 @@ export const GenerateUgcContentResponse = zod.object({
     zod.object({
       b64_json: zod.string(),
       index: zod.number(),
+      aspectRatio: zod
+        .enum(["9:16", "1:1", "4:5", "16:9"])
+        .describe("Aspect ratio used for this image"),
     }),
   ),
   videoConcepts: zod

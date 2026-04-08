@@ -5,8 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GenerateUgcResponseImagesItemAspectRatio } from "./generateUgcResponseImagesItemAspectRatio";
 
 export type GenerateUgcResponseImagesItem = {
   b64_json: string;
   index: number;
+  /** Aspect ratio used for this image */
+  aspectRatio: GenerateUgcResponseImagesItemAspectRatio;
 };

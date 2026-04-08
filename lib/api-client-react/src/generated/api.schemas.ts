@@ -130,9 +130,24 @@ export interface GenerateUgcBody {
   platform?: GenerateUgcBodyPlatform;
 }
 
+/**
+ * Aspect ratio used for this image
+ */
+export type GenerateUgcResponseImagesItemAspectRatio =
+  (typeof GenerateUgcResponseImagesItemAspectRatio)[keyof typeof GenerateUgcResponseImagesItemAspectRatio];
+
+export const GenerateUgcResponseImagesItemAspectRatio = {
+  "9:16": "9:16",
+  "1:1": "1:1",
+  "4:5": "4:5",
+  "16:9": "16:9",
+} as const;
+
 export type GenerateUgcResponseImagesItem = {
   b64_json: string;
   index: number;
+  /** Aspect ratio used for this image */
+  aspectRatio: GenerateUgcResponseImagesItemAspectRatio;
 };
 
 export type GenerateUgcResponseVideoConceptsItem = {
