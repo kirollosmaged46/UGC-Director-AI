@@ -27,13 +27,18 @@ import {
 
 type IonicIcon = React.ComponentProps<typeof Ionicons>["name"];
 
-const AD_ANGLES: { id: AdAngle; label: string; tagline: string; icon: IonicIcon; desc: string }[] = [
+const AD_ANGLES: { id: AdAngle; label: string; tagline: string; icon: IonicIcon; desc: string; suggestions: string[] }[] = [
   {
     id: "us-vs-them",
     label: "Us vs. Them",
     tagline: "Make the choice obvious",
     icon: "swap-horizontal-outline",
     desc: "Creator tried the old way — then found this. The contrast is undeniable.",
+    suggestions: [
+      "I spent 2 years trying everything — nothing worked until this",
+      "Stop wasting money on [old way]. This is what actually works",
+      "Every other option had the same problem. Then I found this",
+    ],
   },
   {
     id: "before-after",
@@ -41,6 +46,11 @@ const AD_ANGLES: { id: AdAngle; label: string; tagline: string; icon: IonicIcon;
     tagline: "Show the transformation",
     icon: "trending-up-outline",
     desc: "Real before moment, real after result. Emotion carries the story.",
+    suggestions: [
+      "6 months ago I was [problem]. This is what changed everything",
+      "Not gonna lie, I didn't believe it would actually work",
+      "The before vs after honestly shocked me",
+    ],
   },
   {
     id: "social-proof",
@@ -48,6 +58,11 @@ const AD_ANGLES: { id: AdAngle; label: string; tagline: string; icon: IonicIcon;
     tagline: "Everyone's already using it",
     icon: "people-outline",
     desc: "Unboxing or mid-use discovery. Genuine surprise, lived-in setting.",
+    suggestions: [
+      "My whole friend group has this now and I finally understand why",
+      "I ordered this on a whim and I can't stop talking about it",
+      "POV: you finally try the thing everyone's been telling you to get",
+    ],
   },
 ];
 
@@ -73,6 +88,7 @@ const CONTENT_TYPES: { id: ContentType; label: string; icon: IonicIcon; desc: st
 ];
 
 const COUNT_OPTIONS = [1, 2, 3];
+const DURATION_OPTIONS = [10, 15, 20, 30];
 
 function OptionChip({
   selected,
@@ -203,6 +219,27 @@ export default function DirectorScreen() {
               <Text style={[styles.angleDesc, { color: settings.angle === a.id ? "rgba(255,255,255,0.8)" : colors.mutedForeground }]}>
                 {a.desc}
               </Text>
+              <View style={styles.suggestionList}>
+                {a.suggestions.map((s, si) => (
+                  <View
+                    key={si}
+                    style={[
+                      styles.suggestionPill,
+                      {
+                        backgroundColor: settings.angle === a.id ? "rgba(255,255,255,0.15)" : colors.secondary,
+                        borderColor: settings.angle === a.id ? "rgba(255,255,255,0.3)" : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.suggestionIcon, { color: settings.angle === a.id ? "rgba(255,255,255,0.7)" : colors.mutedForeground }]}>
+                      {si === 0 ? "🎯" : si === 1 ? "🔥" : "💬"}
+                    </Text>
+                    <Text style={[styles.suggestionText, { color: settings.angle === a.id ? "rgba(255,255,255,0.85)" : colors.foreground }]}>
+                      "{s}"
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </Pressable>
           ))}
         </Animated.View>
@@ -280,6 +317,35 @@ export default function DirectorScreen() {
           </Animated.View>
         )}
 
+        {settings.contentType !== "photo" && (
+          <Animated.View entering={FadeInDown.delay(170).duration(400)} style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>VIDEO DURATION</Text>
+            <View style={styles.durationRow}>
+              {DURATION_OPTIONS.map((d) => (
+                <Pressable
+                  key={d}
+                  onPress={() => { Haptics.selectionAsync(); updateSettings({ videoDuration: d }); }}
+                  style={[
+                    styles.durationChip,
+                    {
+                      backgroundColor: settings.videoDuration === d ? colors.primary : colors.card,
+                      borderColor: settings.videoDuration === d ? colors.primary : colors.border,
+                      borderRadius: colors.radius,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.durationNum, { color: settings.videoDuration === d ? colors.primaryForeground : colors.foreground }]}>
+                    {d}s
+                  </Text>
+                  <Text style={[styles.durationSub, { color: settings.videoDuration === d ? "rgba(255,255,255,0.7)" : colors.mutedForeground }]}>
+                    {d <= 10 ? "Short" : d <= 15 ? "Standard" : d <= 20 ? "Extended" : "Long"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Animated.View>
+        )}
+
         <Animated.View entering={FadeInDown.delay(180).duration(400)} style={styles.generateSection}>
           <Pressable
             style={[styles.generateBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
@@ -332,6 +398,14 @@ const styles = StyleSheet.create({
   countRow: { flexDirection: "row", gap: 10 },
   countChip: { width: 56, height: 56, alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
   countLabel: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  durationRow: { flexDirection: "row", gap: 8 },
+  durationChip: { flex: 1, paddingVertical: 12, alignItems: "center", borderWidth: 1.5, gap: 2 },
+  durationNum: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  durationSub: { fontSize: 9, fontFamily: "Inter_400Regular" },
+  suggestionList: { gap: 6, marginTop: 4 },
+  suggestionPill: { flexDirection: "row", alignItems: "flex-start", gap: 6, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1 },
+  suggestionIcon: { fontSize: 11, lineHeight: 16, minWidth: 14 },
+  suggestionText: { flex: 1, fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16, fontStyle: "italic" },
   generateSection: { gap: 10 },
   generateBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, height: 56 },
   generateBtnText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff" },

@@ -300,6 +300,7 @@ export default function GenerateScreen() {
             avatarStyle: avatar.style,
             avatarEthnicity: avatar.ethnicity,
             avatarLanguage: avatar.language,
+            videoDuration: settings.videoDuration,
           }),
         });
         if (!resp.ok) throw new Error(`Photo generation failed (${resp.status})`);
@@ -327,6 +328,7 @@ export default function GenerateScreen() {
             avatarStyle: avatar.style,
             avatarEthnicity: avatar.ethnicity,
             avatarLanguage: avatar.language,
+            videoDuration: settings.videoDuration,
           }),
         });
         if (!resp.ok) throw new Error(`Video generation failed (${resp.status})`);

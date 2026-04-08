@@ -66,6 +66,7 @@ export interface UGCSettings {
   count: number;
   contentType: ContentType;
   platform: Platform;
+  videoDuration: number;
 }
 
 const DEFAULT_AVATAR: AvatarConfig = {
@@ -114,6 +115,7 @@ const DEFAULT_SETTINGS: UGCSettings = {
   count: 1,
   contentType: "photo",
   platform: "tiktok",
+  videoDuration: 15,
 };
 
 export function UGCProvider({ children }: { children: React.ReactNode }) {

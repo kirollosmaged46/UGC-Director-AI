@@ -25,6 +25,7 @@ const GenerateSchema = z.object({
   platform: z.enum(["tiktok", "instagram", "youtube"]).default("tiktok"),
   productName: z.string().max(200).optional(),
   creativeVision: z.string().max(3000).optional(),
+  videoDuration: z.number().int().min(5).max(60).optional().default(15),
   avatarEnabled: z.boolean().optional().default(false),
   avatarGender: z.enum(["male", "female"]).optional().default("female"),
   avatarStyle: z.enum(["casual", "professional", "streetwear", "sporty"]).optional().default("casual"),
@@ -89,20 +90,20 @@ async function editProductImage(
 async function buildVideoFromKeyframes(
   keyframePaths: string[],
   outputPath: string,
-  aspectRatio: string
+  aspectRatio: string,
+  totalDuration = 15
 ): Promise<void> {
   const { w, h } = ffmpegDimensions(aspectRatio);
   const fps = 24;
-  const clipDur = 4.5;
-  const fadeDur = 0.5;
+  const n = keyframePaths.length;
+  const clipDur = parseFloat((totalDuration / n).toFixed(2));
+  const fadeDur = Math.min(0.5, clipDur * 0.1);
   const d = Math.round(fps * clipDur);
 
   const inputs: string[] = [];
   for (const kf of keyframePaths) {
-    inputs.push("-loop", "1", "-t", String(clipDur + 1), "-i", kf);
+    inputs.push("-framerate", String(fps), "-loop", "1", "-t", String(clipDur + 1), "-i", kf);
   }
-
-  const n = keyframePaths.length;
 
   const zoomDirections = [
     `z='min(zoom+0.0015,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
@@ -161,7 +162,7 @@ router.post("/generate", async (req, res) => {
 
   const {
     imageBase64, angle, lighting, aspectRatio, count, contentType, platform,
-    productName, creativeVision,
+    productName, creativeVision, videoDuration,
     avatarEnabled, avatarGender, avatarStyle, avatarEthnicity, avatarLanguage,
   } = parsed.data;
 
@@ -195,7 +196,7 @@ Product: ${productName ?? "this product"}
 Creative vision: ${creativeVision ?? "authentic lifestyle, real person energy"}${avatarContext}
 
 Rules:
-- Each scene is 4-5 seconds
+- Each scene is ${Math.round(videoDuration / 3)} seconds
 - Scenes build a narrative arc matching the ad angle
 - Feel like real UGC shot by a genuine user, not a brand shoot
 - No text overlays, no graphics — pure visual storytelling
@@ -257,7 +258,7 @@ Return ONLY valid JSON:
       const videoPath = path.join(tmpDir, `ugc-video-${randomUUID()}.mp4`);
       tmpFiles.push(videoPath);
 
-      await buildVideoFromKeyframes(keyframePaths, videoPath, aspectRatio);
+      await buildVideoFromKeyframes(keyframePaths, videoPath, aspectRatio, videoDuration);
 
       const videoUrl = await videoStorage.uploadVideoAndGetUrl(videoPath);
 
