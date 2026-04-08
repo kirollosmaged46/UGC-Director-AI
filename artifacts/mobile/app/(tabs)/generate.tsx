@@ -347,7 +347,7 @@ export default function GenerateScreen() {
               angle: settings.angle,
               lighting: settings.lighting,
               aspectRatio: settings.aspectRatio,
-              count: 1,
+              count: 1, // count is ignored server-side for video (always 3 keyframes)
               contentType: "video",
               platform: settings.platform,
               creativeVision: creativeVision || undefined,
