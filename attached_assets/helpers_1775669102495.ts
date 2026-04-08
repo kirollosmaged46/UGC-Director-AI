@@ -93,6 +93,7 @@ Wide enough to feel like a real space, close enough to feel like a real person.`
   const ratioDesc = ratioMap[aspectRatio] ?? aspectRatio;
   const platformDesc = platformMap[platform] ?? platform;
 
+  // Build product context line
   const productLine = productName
     ? `The product is: ${productName}${productCategory ? ` (${productCategory})` : ""}. `
     : productCategory
