@@ -72,6 +72,7 @@ export default function ChatScreen() {
   const [referenceIsVideo, setReferenceIsVideo] = useState(false);
   const [referenceThumbnailUri, setReferenceThumbnailUri] = useState<string | null>(null);
   const [isPickingRef, setIsPickingRef] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -99,6 +100,7 @@ export default function ChatScreen() {
         allowsEditing: false,
         videoMaxDuration: 120,
       });
+      setShowAttachMenu(false);
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         const isVideo = asset.type === "video";
@@ -124,25 +126,20 @@ export default function ChatScreen() {
   }, []);
 
   const pickReference = useCallback(() => {
-    Alert.alert(
-      "Add Reference",
-      "Choose what type of reference to attach",
-      [
-        {
-          text: "Photo",
-          onPress: () => pickMedia(["images"]),
-        },
-        {
-          text: "Video",
-          onPress: () => pickMedia(["videos"]),
-        },
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-      ],
-      { cancelable: true }
-    );
+    if (Platform.OS === "web") {
+      setShowAttachMenu((prev) => !prev);
+    } else {
+      Alert.alert(
+        "Add Reference",
+        "Choose what type of reference to attach",
+        [
+          { text: "Photo", onPress: () => pickMedia(["images"]) },
+          { text: "Video", onPress: () => pickMedia(["videos"]) },
+          { text: "Cancel", style: "cancel" },
+        ],
+        { cancelable: true }
+      );
+    }
   }, [pickMedia]);
 
   const clearReference = useCallback(() => {
@@ -370,6 +367,25 @@ export default function ChatScreen() {
           </Animated.View>
         )}
 
+        {showAttachMenu && Platform.OS === "web" && (
+          <Animated.View entering={FadeIn.duration(150)} style={[styles.attachMenu, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+            <Pressable
+              style={[styles.attachMenuItem, { borderBottomWidth: 1, borderBottomColor: colors.border }]}
+              onPress={() => { pickMedia(["images"]); }}
+            >
+              <Ionicons name="image-outline" size={18} color={colors.foreground} />
+              <Text style={[styles.attachMenuText, { color: colors.foreground }]}>Photo</Text>
+            </Pressable>
+            <Pressable
+              style={styles.attachMenuItem}
+              onPress={() => { pickMedia(["videos"]); }}
+            >
+              <Ionicons name="videocam-outline" size={18} color={colors.foreground} />
+              <Text style={[styles.attachMenuText, { color: colors.foreground }]}>Video</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+
         <View
           style={[
             styles.inputRow,
@@ -516,6 +532,23 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     textAlign: "center",
     lineHeight: 9,
+  },
+  attachMenu: {
+    borderWidth: 1,
+    overflow: "hidden",
+    alignSelf: "flex-start",
+    minWidth: 130,
+  },
+  attachMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  attachMenuText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
   },
   input: {
     flex: 1,
