@@ -31,6 +31,7 @@ import Animated, {
   FadeIn,
   FadeInDown,
 } from "react-native-reanimated";
+import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { TAB_BAR_HEIGHT } from "./_layout";
 import { useUGC, type GenerationResult, type GeneratedImage, type Hook, type AdAngle } from "@/context/UGCContext";
@@ -315,6 +316,8 @@ export default function GenerateScreen() {
     setIsGenerating,
     generateTrigger,
     generateAllAnglesTrigger,
+    triggerGenerate,
+    triggerGenerateAllAngles,
   } = useUGC();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -729,9 +732,55 @@ export default function GenerateScreen() {
       <View style={[styles.container, styles.emptyState, { backgroundColor: colors.background }]}>
         <MaterialCommunityIcons name="creation" size={48} color={colors.mutedForeground} />
         <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Nothing generated yet</Text>
-        <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
-          Upload a product image, set your direction, then tap "Generate Content"
-        </Text>
+        {productImageUri ? (
+          <>
+            <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+              Product image ready. Generate now or adjust direction first.
+            </Text>
+            <View style={styles.emptyActions}>
+              <Pressable
+                style={[styles.emptySecondaryBtn, { borderColor: colors.primary, borderRadius: colors.radius }]}
+                onPress={() => router.push("/(tabs)/director")}
+              >
+                <MaterialCommunityIcons name="tune" size={16} color={colors.primary} />
+                <Text style={[styles.emptySecondaryBtnText, { color: colors.primary }]}>Adjust Direction</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.emptyPrimaryBtn, { flex: 1, backgroundColor: colors.primary, borderRadius: colors.radius }]}
+                onPress={() => {
+                  setCurrentResult(null);
+                  triggerGenerate();
+                }}
+              >
+                <MaterialCommunityIcons name="creation" size={18} color={colors.primaryForeground} />
+                <Text style={[styles.emptyPrimaryBtnText, { color: colors.primaryForeground }]}>Generate Now</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              style={[styles.emptyAllAnglesBtn, { borderColor: colors.border, borderRadius: colors.radius }]}
+              onPress={() => {
+                setCurrentResult(null);
+                triggerGenerateAllAngles();
+              }}
+            >
+              <MaterialCommunityIcons name="compare" size={15} color={colors.mutedForeground} />
+              <Text style={[styles.emptyAllAnglesBtnText, { color: colors.mutedForeground }]}>Generate All 3 Angles</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+              Upload a product image on the Studio tab to get started.
+            </Text>
+            <Pressable
+              style={[styles.emptyPrimaryBtn, { backgroundColor: colors.primary, borderRadius: colors.radius, marginTop: 8 }]}
+              onPress={() => router.push("/(tabs)/")}
+            >
+              <Ionicons name="image-outline" size={18} color={colors.primaryForeground} />
+              <Text style={[styles.emptyPrimaryBtnText, { color: colors.primaryForeground }]}>Go to Studio</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     );
   }
@@ -930,6 +979,40 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   emptyHint: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  emptyActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  emptyPrimaryBtn: {
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 24,
+    alignSelf: "stretch",
+  },
+  emptyPrimaryBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  emptySecondaryBtn: {
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
+    flex: 1,
+  },
+  emptySecondaryBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  emptyAllAnglesBtn: {
+    height: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    paddingHorizontal: 20,
+    alignSelf: "center",
+    marginTop: -4,
+  },
+  emptyAllAnglesBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   pageTitle: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   pageSub: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 2 },
   generatingContainer: {

@@ -34,11 +34,42 @@ interface ChatMessage {
 
 const SYSTEM_INTRO = "I'm your AI creative director. Tell me about your product — what it is, who it's for, and the vibe you're going for. You can also share a reference image or UGC you love, and I'll extract the style for you.";
 
+function captureVideoFrameWeb(videoUri: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.onloadeddata = () => {
+      video.currentTime = 0;
+    };
+    video.onseeked = () => {
+      const canvas = document.createElement("canvas");
+      const maxDim = 640;
+      const scale = Math.min(1, maxDim / Math.max(video.videoWidth || maxDim, video.videoHeight || maxDim));
+      canvas.width = Math.round((video.videoWidth || maxDim) * scale);
+      canvas.height = Math.round((video.videoHeight || maxDim) * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas")); return; }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    video.onerror = reject;
+    video.src = videoUri;
+  });
+}
+
 const MAX_DIM = 1280;
 const JPEG_QUALITY = 0.82;
 
 async function uriToBase64(uri: string): Promise<{ b64: string; mime: string }> {
   if (Platform.OS === "web") {
+    if (uri.startsWith("data:")) {
+      const [header, b64] = uri.split(",");
+      const mime = header?.split(":")[1]?.split(";")[0] ?? "image/jpeg";
+      return { b64: b64 ?? "", mime };
+    }
     const response = await fetch(uri);
     const blob = await response.blob();
     const mime = "image/jpeg";
@@ -125,7 +156,13 @@ export default function ChatScreen() {
         setReferenceIsVideo(isVideo);
         if (isVideo) {
           try {
-            const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 0 });
+            let thumbUri: string;
+            if (Platform.OS === "web") {
+              thumbUri = await captureVideoFrameWeb(asset.uri);
+            } else {
+              const t = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 0 });
+              thumbUri = t.uri;
+            }
             setReferenceThumbnailUri(thumbUri);
           } catch {
             setReferenceThumbnailUri(null);

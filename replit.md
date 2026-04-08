@@ -88,3 +88,5 @@ The `artifacts/mobile: expo` workflow now shows **RUNNING** correctly.
 - Scan the QR code from the workflow logs with Expo Go to test on a real device
 
 **Do NOT add `--localhost` back** — it restricts Metro to `127.0.0.1` and breaks the workflow health check.
+
+**babel-preset-expo symlink**: Metro workers spawn from the root workspace dir so they can't find `babel-preset-expo` in `artifacts/mobile/node_modules`. A symlink exists at `node_modules/babel-preset-expo` → the pnpm store entry. If this breaks after pnpm installs, re-run: `ln -sfn "$(pwd)/$(ls -d node_modules/.pnpm/babel-preset-expo* | head -1)/node_modules/babel-preset-expo" node_modules/babel-preset-expo`
