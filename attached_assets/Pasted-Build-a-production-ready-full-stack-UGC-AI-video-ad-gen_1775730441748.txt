@@ -1,0 +1,260 @@
+Build a production-ready full-stack UGC AI video ad generator web app inspired by Arcads and AdSkull. The app must work end-to-end without breaking. Stability and reliability are the top priority — every step must have error handling and fallbacks.
+
+---
+
+TECH STACK:
+- Frontend: React + Tailwind CSS (dark premium UI)
+- Backend: Express.js + Node.js
+- Script AI: Claude API (claude-sonnet-4-20250514)
+- Video AI: Kling AI API
+- TTS: ElevenLabs API
+- Lip Sync: Hedra API (for avatar talking head option)
+- Storage: Replit Object Storage
+- Job Queue: simple in-memory queue with status polling (no Redis needed)
+- No database — stateless
+
+---
+
+USER INPUTS (single form):
+
+REQUIRED:
+- Product Name (text input)
+- Product Category (dropdown: skincare / supplement / fashion / food & beverage / home / tech / other)
+- Product Description (textarea)
+- Ad Angle (dropdown: us-vs-them / before-after / social-proof)
+- Target Platform (dropdown: TikTok / Instagram Reels / YouTube Shorts)
+- Aspect Ratio (dropdown: 9:16 / 1:1 / 4:5)
+
+OPTIONAL UPLOADS:
+- Product Image (image upload — used for product placement in scenes)
+- Reference Video (video upload — used as visual style reference for Kling)
+  Show helper text: "Upload a UGC video you like — the AI will match its energy and style"
+- Creator Avatar Image (image upload — used for Hedra talking head generation)
+
+OPTIONAL CREATIVE:
+- Hook Style (dropdown: question / bold statement / mid-action / shocking fact / "I tried this so you don't have to")
+- Voiceover Language (dropdown: English / Arabic Gulf dialect)
+- Creative Vision (textarea — optional extra direction)
+
+---
+
+GENERATION PIPELINE:
+
+The pipeline runs as a background job. Frontend polls /api/status/:jobId every 3 seconds and shows live progress.
+
+Progress steps shown in UI:
+1. Writing script...
+2. Generating voiceover...
+3. Generating video scenes...
+4. Adding product to scenes...
+5. Assembling final video...
+6. Done ✓
+
+---
+
+STEP 1 — CLAUDE SCRIPT:
+
+System prompt to Claude:
+"""
+You are a world-class UGC creative director. You write video ad scripts that feel completely real — not corporate, not polished, not AI. Think Arcads, Billo, real TikTok creators who actually use the product.
+
+Return ONLY a valid JSON object. No explanation. No markdown. No preamble. Just raw JSON.
+
+Structure:
+{
+  "hook": "first 3 seconds — one punchy line or mid-action moment. No brand name. No greeting. Starts mid-thought or mid-action.",
+  "hook_variants": ["variant 1", "variant 2", "variant 3"],
+  "scenes": [
+    {
+      "scene_number": 1,
+      "duration_seconds": 3,
+      "visual": "exact camera description — location, framing, action, what hands are doing, lighting quality",
+      "voiceover": "what the creator says — sounds like texting out loud, casual, imperfect, first person",
+      "emotion": "what the viewer feels in this moment"
+    },
+    {
+      "scene_number": 2,
+      "duration_seconds": 4,
+      "visual": "...",
+      "voiceover": "...",
+      "emotion": "..."
+    },
+    {
+      "scene_number": 3,
+      "duration_seconds": 4,
+      "visual": "...",
+      "voiceover": "...",
+      "emotion": "..."
+    },
+    {
+      "scene_number": 4,
+      "duration_seconds": 4,
+      "visual": "...",
+      "voiceover": "...",
+      "emotion": "..."
+    }
+  ],
+  "cta": "last 3 seconds — casual first-person. Never say click the link or buy now.",
+  "caption": "platform-native caption with emojis under 150 chars"
+}
+
+AD ANGLE RULES:
+
+us-vs-them: Open with pain of old way. Show the switch naturally. End with result not features. Never name a competitor.
+
+before-after: Before is emotionally real not just visual. After shows feeling not appearance. Transition feels accidental and organic.
+
+social-proof: Start with genuine surprise or discovery. One hyper-specific personal detail. Never list features. Feels like telling a friend.
+
+HOOK STYLE RULES:
+- question: opens with a relatable question the viewer is already thinking
+- bold statement: controversial or surprising opener that stops the scroll
+- mid-action: starts in the middle of using the product — no intro
+- shocking fact: one stat or fact that reframes everything
+- "I tried this so you don't have to": self-aware, curious, testing energy
+
+AUTHENTICITY NON-NEGOTIABLES:
+- Visuals are always real locations: bedroom, bathroom, kitchen, gym bag, car seat, cafe
+- Clothing is casual: hoodie, oversized tee — not influencer outfit
+- Lighting is imperfect: window light, lamp, outdoor shade — never studio flash
+- Voiceover has natural pauses and filler — "honestly", "like", "I was not expecting this"
+- If Arabic: Gulf dialect, casual, conversational — never formal or MSA
+"""
+
+User message:
+"""
+Product: [productName]
+Category: [productCategory]
+Description: [productDescription]
+Ad Angle: [adAngle]
+Platform: [platform]
+Hook Style: [hookStyle]
+Language: [voiceoverLanguage]
+Reference video provided: [yes/no]
+Creative Vision: [creativeVision or "none"]
+
+Write the full UGC video script.
+"""
+
+Parse the JSON response. If parsing fails — retry Claude once with instruction to fix JSON only.
+
+---
+
+STEP 2 — ELEVENLABS VOICEOVER:
+
+Concatenate: hook + all scene voiceovers + cta into one string.
+
+API settings:
+- If English: voice_id = "Rachel", model = "eleven_multilingual_v2", stability: 0.4, similarity_boost: 0.75, style: 0.3
+- If Arabic: voice_id = "Adam", model = "eleven_multilingual_v2", stability: 0.5, similarity_boost: 0.8, style: 0.2
+
+Save as mp3 to Replit Object Storage.
+FALLBACK: if ElevenLabs fails, continue pipeline without audio and show warning in UI. Never block the video generation because of TTS failure.
+
+---
+
+STEP 3 — KLING VIDEO GENERATION:
+
+Generate all 4 scenes in parallel (Promise.all).
+
+Kling prompt per scene:
+"""
+Authentic UGC smartphone video footage. Real person, real location, filmed on iPhone.
+[scene.visual from Claude output]
+[If reference video uploaded: "Match the visual style, energy, and authenticity level of the reference footage provided."]
+[If product image uploaded: "The product [productName] appears naturally in frame — held in hand, on surface, or in use."]
+Lighting: natural and imperfect — window light, lamp, outdoor shade. Never studio lighting.
+Camera: handheld, slight natural shake, real person energy. Slight imperfect framing.
+NOT stock footage. NOT studio shoot. NOT corporate ad. NOT AI-looking plastic skin.
+Real skin texture. Real background — slightly lived-in, slightly out of focus.
+No text overlays. No logos. No watermarks. No captions.
+Platform: [platform]. Aspect ratio: [aspectRatio].
+Emotion of this scene: [scene.emotion]
+"""
+
+If reference video is uploaded: pass it to Kling as style reference in the API call.
+
+For each scene:
+- Poll Kling status until complete (max 3 minutes per scene)
+- Save clip to Replit Object Storage
+- FALLBACK: if Kling fails after 1 retry — generate a static keyframe image with Ken Burns zoompan effect using ffmpeg as replacement clip
+
+---
+
+STEP 4 — PRODUCT INPAINTING (if product image uploaded):
+
+For each generated scene clip — extract middle frame as PNG.
+Use Kling inpainting API:
+"""
+Place [productName] naturally into this scene.
+Product should appear as if it was always there — in a hand, on a surface, or being used.
+Match the scene lighting and perspective exactly.
+No hard edges. No obvious compositing. Completely seamless.
+"""
+Replace the clip with inpainted version.
+FALLBACK: if inpainting fails — use original clip without inpainting. Never block pipeline.
+
+---
+
+STEP 5 — FFMPEG ASSEMBLY:
+
+1. Concatenate 4 scene clips with xfade crossfade (0.3s) between each
+2. Mix ElevenLabs mp3 audio over assembled video (audio slightly prominent)
+3. Normalize audio levels
+4. Output: H264 mp4, quality CRF 23
+5. Upload final video to Replit Object Storage
+6. Return signed URL valid for 24 hours
+
+---
+
+FRONTEND UI:
+
+Dark theme. Clean. Premium. Two states:
+
+STATE 1 — FORM:
+- All inputs in a clean card layout
+- Upload zones with drag-and-drop for product image, reference video, avatar image
+- "Generate Ad" button — full width, prominent
+- Estimated time shown: "~2 minutes"
+
+STATE 2 — GENERATING:
+- Progress bar with step labels (Script → Voiceover → Video → Assembly)
+- Live step indicator — current step highlighted
+- Cannot resubmit while generating
+
+STATE 3 — RESULTS:
+- Video player full width, autoplay muted, loop
+- Hook displayed above video as large text
+- Caption below with one-click copy button
+- Hook variants as clickable chips — clicking one regenerates with that hook
+- Download button (downloads the mp4)
+- Regenerate button (reruns from script step, keeps same inputs)
+- Share button (copies signed URL)
+
+---
+
+API ROUTES:
+POST /api/generate — validates inputs, starts background job, returns { jobId }
+GET /api/status/:jobId — returns { status, currentStep, stepIndex, totalSteps, result? }
+POST /api/regenerate/:jobId — reruns pipeline with same inputs, new jobId
+
+---
+
+STABILITY RULES (most important):
+- Every external API call wrapped in try/catch with retry logic (1 retry max)
+- Every step has a fallback — pipeline never fully crashes
+- If any step fails after retry — skip it gracefully and continue
+- All errors logged to console with step name and error message
+- User never sees a raw error — always a friendly message
+- Kling polling has a timeout — never hang forever
+- All file operations wrapped in try/catch
+- Memory queue cleaned up after 1 hour to prevent memory leaks
+
+---
+
+ENVIRONMENT VARIABLES:
+ANTHROPIC_API_KEY
+KLING_API_KEY  
+ELEVENLABS_API_KEY
+HEDRA_API_KEY
+DEFAULT_OBJECT_STORAGE_BUCKET_ID
