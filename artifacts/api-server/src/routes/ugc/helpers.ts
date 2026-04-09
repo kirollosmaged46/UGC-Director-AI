@@ -42,8 +42,9 @@ export function buildUgcPrompt(params: {
   productCategory?: string;
   creativeVision?: string;
   sceneContext?: string;
+  fashionStyle?: string;
 }): string {
-  const { angle, lighting, aspectRatio, platform, productName, productCategory, creativeVision, sceneContext } = params;
+  const { angle, lighting, aspectRatio, platform, productName, productCategory, creativeVision, sceneContext, fashionStyle } = params;
 
   const angleNarrative = buildAngleNarrative(angle);
 
@@ -135,6 +136,42 @@ Wide enough to feel like a real space, close enough to feel like a real person.`
   prompt += `- AI image tells (plastic skin, symmetrical everything, fake background blur)\n`;
   prompt += `- Corporate ad energy (product floating on white, benefit callouts, brand colors everywhere)\n`;
   prompt += `- Over-styled scenes (too many props, too curated, too "aesthetic")\n`;
+
+  if (fashionStyle) {
+    const fashionDirections: Record<string, string> = {
+      "ootd": `FASHION UGC STYLE — OUTFIT OF THE DAY (OOTD):
+Full body shot showing the complete outfit in context. Creator is dressed head-to-toe, real setting (bedroom, street, cafe).
+The garment is the star — but it's worn by a real person, not a mannequin. Show the silhouette, drape, and movement.
+Background feels like their actual life, not a studio. Natural walking or standing pose, not forced.`,
+
+      "try-on": `FASHION UGC STYLE — TRY-ON:
+Creator is actively trying on or wearing the item for the first time on camera. Real-time reaction energy.
+Show fit from multiple angles — how it sits on the body, how it moves. Real body type, no excessive posing.
+Mirror or direct camera. Feels like you're watching a friend try something on in a changing room.`,
+
+      "flat-lay": `FASHION UGC STYLE — FLAT LAY:
+Overhead top-down shot of the garment/item arranged on a flat surface. Editorial but accessible.
+Clean background (bed, floor, light surface). Items styled naturally — not overly curated.
+Show texture, pattern, details up close. Color accuracy is key. Natural daylight preferred.`,
+
+      "styling-tips": `FASHION UGC STYLE — STYLING TIPS:
+Creator demonstrating how to style or wear the item. Educational, creator-to-follower energy.
+Show at least 2 different ways to wear it. Real wardrobe context. Conversational, no script energy.
+Close-up on details that matter — buttons, fabric, layering. Hands and product always visible.`,
+
+      "haul": `FASHION UGC STYLE — HAUL:
+Multiple items spread out or shown one by one. Excitement of a real haul video.
+Creator's bedroom, living room, or bed as background. Items held up, unfolded, described casually.
+Real price awareness, real opinions. No unboxing scripts — pure authentic reaction.`,
+
+      "mirror-selfie": `FASHION UGC STYLE — MIRROR SELFIE:
+Phone visible in reflection — that's the point. Authentic low-effort aesthetic.
+Real bedroom, bathroom, or fitting room. Creator checking themselves out in the mirror.
+The item looks good but the vibe is casual and real. No professional posing — just honest self-expression.`,
+    };
+
+    prompt += `\nFASHION UGC STYLE DIRECTIVE:\n${fashionDirections[fashionStyle] ?? ""}\n`;
+  }
 
   if (creativeVision) {
     prompt += `\nCREATIVE DIRECTOR NOTE:\n${creativeVision}\n`;

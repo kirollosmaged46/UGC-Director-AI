@@ -31,6 +31,7 @@ const GenerateSchema = z.object({
   avatarStyle: z.enum(["casual", "professional", "streetwear", "sporty"]).optional().default("casual"),
   avatarEthnicity: z.string().max(50).optional().default("diverse"),
   avatarLanguage: z.string().max(30).optional().default("english"),
+  fashionStyle: z.enum(["ootd", "try-on", "flat-lay", "styling-tips", "haul", "mirror-selfie"]).optional(),
 });
 
 const ScriptsSchema = z.object({
@@ -94,17 +95,17 @@ async function geminiGenerateText(model: string, prompt: string): Promise<string
 }
 
 async function geminiGenerateImage(
-  model: string,
   prompt: string,
   imagePngBase64: string
 ): Promise<Buffer> {
+  const model = "gemini-2.0-flash-preview-image-generation";
   const url = `${GEMINI_BASE}/v1beta/models/${model}:generateContent?key=${geminiKey()}`;
   const body = {
     contents: [
       {
         role: "user",
         parts: [
-          { inline_data: { mime_type: "image/png", data: imagePngBase64 } },
+          { inlineData: { mimeType: "image/png", data: imagePngBase64 } },
           { text: prompt },
         ],
       },
@@ -280,6 +281,7 @@ router.post("/generate", async (req, res) => {
     imageBase64, angle, lighting, aspectRatio, count, contentType, platform,
     productName, creativeVision, videoDuration,
     avatarEnabled, avatarGender, avatarStyle, avatarEthnicity, avatarLanguage,
+    fashionStyle,
   } = parsed.data;
 
   const avatarContext = avatarEnabled
@@ -299,13 +301,10 @@ router.post("/generate", async (req, res) => {
       const imagePrompt = buildUgcPrompt({
         angle, lighting, aspectRatio, platform, productName,
         creativeVision: (creativeVision ?? "") + avatarContext,
+        fashionStyle,
       });
 
-      const keyframeBuffer = await geminiGenerateImage(
-        "gemini-2.5-flash-preview-05-20",
-        imagePrompt,
-        productBase64
-      );
+      const keyframeBuffer = await geminiGenerateImage(imagePrompt, productBase64);
       const kfPath = path.join(tmpDir, `ugc-kf-${randomUUID()}.png`);
       await writeFile(kfPath, keyframeBuffer);
       tmpFiles.push(kfPath);
@@ -316,8 +315,18 @@ router.post("/generate", async (req, res) => {
         : angle === "before-after" ? "before-and-after transformation narrative"
         : "authentic social proof and unboxing moment";
 
+      const fashionStyleDesc: Record<string, string> = {
+        "ootd": "Outfit of the Day format — full body shot, lifestyle context, real setting.",
+        "try-on": "Try-on style — creator wearing the item, showing fit, movement, and how it looks on a real body.",
+        "flat-lay": "Flat lay editorial style — overhead product arrangement, clean background, fashion editorial energy.",
+        "styling-tips": "Styling tips UGC — creator explaining how to style the item, educational tone, real wardrobe context.",
+        "haul": "Haul / unboxing style — multiple items shown, creator's genuine excitement, casual home setting.",
+        "mirror-selfie": "Mirror selfie POV — authentic self-filmed, real bedroom or fitting room, low-effort high-relatability.",
+      };
+
       const veoPrompt = [
-        `Authentic UGC-style short video ad for ${productName ?? "a product"}.`,
+        `Authentic UGC-style short video ad for ${productName ?? "a fashion product"}.`,
+        fashionStyle ? fashionStyleDesc[fashionStyle] : "",
         `Ad angle: ${angleDesc}.`,
         `Lighting: ${lighting.replace("-", " ")}.`,
         `Platform: ${platform} — feel like real content filmed on a smartphone, slightly imperfect, one-take energy.`,
@@ -347,12 +356,9 @@ router.post("/generate", async (req, res) => {
       const prompt = buildUgcPrompt({
         angle, lighting, aspectRatio, platform, productName,
         creativeVision: (creativeVision ?? "") + avatarContext,
+        fashionStyle,
       });
-      const imgBuffer = await geminiGenerateImage(
-        "gemini-2.5-flash-preview-05-20",
-        prompt,
-        productBase64
-      );
+      const imgBuffer = await geminiGenerateImage(prompt, productBase64);
       generatedImages.push({
         b64_json: imgBuffer.toString("base64"),
         index: i,

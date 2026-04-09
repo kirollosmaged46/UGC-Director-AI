@@ -23,6 +23,7 @@ import {
   type AspectRatio,
   type Platform as SocialPlatform,
   type ContentType,
+  type FashionStyle,
 } from "@/context/UGCContext";
 
 type IonicIcon = React.ComponentProps<typeof Ionicons>["name"];
@@ -89,6 +90,15 @@ const CONTENT_TYPES: { id: ContentType; label: string; icon: IonicIcon; desc: st
 
 const COUNT_OPTIONS = [1, 2, 3];
 const DURATION_OPTIONS = [10, 15, 20, 30];
+
+const FASHION_STYLES: { id: FashionStyle; label: string; emoji: string; desc: string }[] = [
+  { id: "ootd",         label: "OOTD",         emoji: "👗", desc: "Outfit of the Day — full body, lifestyle context" },
+  { id: "try-on",       label: "Try-On",        emoji: "🪞", desc: "Wearing the item, movement & fit focus" },
+  { id: "flat-lay",     label: "Flat Lay",      emoji: "📐", desc: "Overhead product arrangement, editorial" },
+  { id: "styling-tips", label: "Styling Tips",  emoji: "✨", desc: "How-to, educational creator energy" },
+  { id: "haul",         label: "Haul",          emoji: "🛍️", desc: "Multiple items, unboxing energy" },
+  { id: "mirror-selfie",label: "Mirror Selfie", emoji: "📱", desc: "Authentic POV, low-effort real feel" },
+];
 
 function OptionChip({
   selected,
@@ -346,6 +356,45 @@ export default function DirectorScreen() {
           </Animated.View>
         )}
 
+        <Animated.View entering={FadeInDown.delay(175).duration(400)} style={styles.section}>
+          <View style={styles.fashionHeader}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>FASHION & STYLE</Text>
+            {settings.fashionStyle && (
+              <Pressable onPress={() => { Haptics.selectionAsync(); updateSettings({ fashionStyle: null }); }}>
+                <Text style={[styles.clearLabel, { color: colors.primary }]}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
+          <View style={styles.fashionGrid}>
+            {FASHION_STYLES.map((f) => {
+              const selected = settings.fashionStyle === f.id;
+              return (
+                <Pressable
+                  key={f.id}
+                  onPress={() => { Haptics.selectionAsync(); updateSettings({ fashionStyle: selected ? null : f.id }); }}
+                  style={[
+                    styles.fashionCard,
+                    {
+                      backgroundColor: selected ? colors.primary : colors.card,
+                      borderColor: selected ? colors.primary : colors.border,
+                      borderRadius: colors.radius,
+                      borderWidth: selected ? 2 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={styles.fashionEmoji}>{f.emoji}</Text>
+                  <Text style={[styles.fashionLabel, { color: selected ? colors.primaryForeground : colors.foreground }]}>
+                    {f.label}
+                  </Text>
+                  <Text style={[styles.fashionDesc, { color: selected ? "rgba(255,255,255,0.65)" : colors.mutedForeground }]}>
+                    {f.desc}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Animated.View>
+
         <Animated.View entering={FadeInDown.delay(180).duration(400)} style={styles.generateSection}>
           <Pressable
             style={[styles.generateBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
@@ -402,6 +451,13 @@ const styles = StyleSheet.create({
   durationChip: { flex: 1, paddingVertical: 12, alignItems: "center", borderWidth: 1.5, gap: 2 },
   durationNum: { fontSize: 17, fontFamily: "Inter_700Bold" },
   durationSub: { fontSize: 9, fontFamily: "Inter_400Regular" },
+  fashionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  clearLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  fashionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  fashionCard: { width: "47%", padding: 12, gap: 4, borderWidth: 1 },
+  fashionEmoji: { fontSize: 22 },
+  fashionLabel: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  fashionDesc: { fontSize: 10, fontFamily: "Inter_400Regular", lineHeight: 14 },
   suggestionList: { gap: 6, marginTop: 4 },
   suggestionPill: { flexDirection: "row", alignItems: "flex-start", gap: 6, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1 },
   suggestionIcon: { fontSize: 11, lineHeight: 16, minWidth: 14 },

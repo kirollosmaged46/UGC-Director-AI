@@ -7,6 +7,7 @@ export type Platform = "tiktok" | "instagram" | "youtube";
 export type ContentType = "photo" | "video" | "both";
 export type AvatarGender = "male" | "female";
 export type AvatarStyle = "casual" | "professional" | "streetwear" | "sporty";
+export type FashionStyle = "ootd" | "try-on" | "flat-lay" | "styling-tips" | "haul" | "mirror-selfie";
 export type AvatarLanguage =
   | "english"
   | "arabic"
@@ -67,6 +68,7 @@ export interface UGCSettings {
   contentType: ContentType;
   platform: Platform;
   videoDuration: number;
+  fashionStyle: FashionStyle | null;
 }
 
 const DEFAULT_AVATAR: AvatarConfig = {
@@ -116,6 +118,7 @@ const DEFAULT_SETTINGS: UGCSettings = {
   contentType: "photo",
   platform: "tiktok",
   videoDuration: 15,
+  fashionStyle: null,
 };
 
 export function UGCProvider({ children }: { children: React.ReactNode }) {
