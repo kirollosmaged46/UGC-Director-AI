@@ -5,6 +5,8 @@ export interface AdgenInputs {
   adAngle: "us-vs-them" | "before-after" | "social-proof";
   platform: "tiktok" | "instagram-reels" | "youtube-shorts";
   aspectRatio: "9:16" | "1:1" | "4:5";
+  videoDuration?: "15s" | "30s" | "60s";
+  selectedAvatarId?: string;
   productImageBase64?: string;
   referenceVideoBase64?: string;
   creatorAvatarBase64?: string;

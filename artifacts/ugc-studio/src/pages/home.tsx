@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Copy, Download, Share2, AlertCircle, CheckCircle2, RotateCw, Video, Upload, Image as ImageIcon, Sparkles, Loader2 } from "lucide-react";
+import { Copy, Download, Share2, AlertCircle, CheckCircle2, RotateCw, Video, Upload, Image as ImageIcon, Sparkles, Loader2, Clock, User } from "lucide-react";
 import { 
   useAdgenGenerate, 
   useAdgenStatus, 
@@ -11,17 +11,41 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
-// --- SCHEMA & TYPES ---
+// --- AVATAR PRESETS ---
+interface AvatarPreset {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  color: string;
+}
 
+const AVATAR_PRESETS: AvatarPreset[] = [
+  { id: "sarah",  name: "Sarah",  emoji: "👩",  description: "Lifestyle, warm & relatable",   color: "#f472b6" },
+  { id: "maya",   name: "Maya",   emoji: "💄",  description: "Beauty, honest reviewer",         color: "#a78bfa" },
+  { id: "alex",   name: "Alex",   emoji: "💪",  description: "Fitness, high energy",             color: "#34d399" },
+  { id: "jordan", name: "Jordan", emoji: "💼",  description: "Professional, solution-focused",   color: "#60a5fa" },
+  { id: "sam",    name: "Sam",    emoji: "🎮",  description: "Gen-Z, raw & unfiltered",          color: "#fb923c" },
+  { id: "layla",  name: "Layla",  emoji: "🌙",  description: "Gulf Arabic, confident & warm",   color: "#f59e0b" },
+  { id: "rachel", name: "Rachel", emoji: "🏠",  description: "Mom creator, real & heartfelt",   color: "#ec4899" },
+  { id: "marcus", name: "Marcus", emoji: "🔬",  description: "Tech-savvy skeptic-turned-fan",   color: "#6366f1" },
+];
+
+// --- DURATION OPTIONS ---
+const DURATION_OPTIONS = [
+  { value: "15s", label: "15 sec", sub: "Quick hit" },
+  { value: "30s", label: "30 sec", sub: "Standard" },
+  { value: "60s", label: "60 sec", sub: "Deep dive" },
+];
+
+// --- SCHEMA & TYPES ---
 const adgenSchema = z.object({
   productName: z.string().min(2, "Product name is required"),
   productCategory: z.enum(["skincare", "supplement", "fashion", "food & beverage", "home", "tech", "other"]),
@@ -29,9 +53,10 @@ const adgenSchema = z.object({
   adAngle: z.enum(["us-vs-them", "before-after", "social-proof"]),
   platform: z.enum(["tiktok", "instagram-reels", "youtube-shorts"]),
   aspectRatio: z.enum(["9:16", "1:1", "4:5"]),
+  videoDuration: z.enum(["15s", "30s", "60s"]).default("30s"),
+  selectedAvatarId: z.string().optional(),
   productImageBase64: z.string().optional(),
   referenceVideoBase64: z.string().optional(),
-  creatorAvatarBase64: z.string().optional(),
   hookStyle: z.enum(["question", "bold-statement", "mid-action", "shocking-fact", "i-tried-this"]).optional(),
   voiceoverLanguage: z.enum(["english", "arabic"]).optional(),
   creativeVision: z.string().optional(),
@@ -123,14 +148,77 @@ function FileUploadField({
   );
 }
 
+// --- AVATAR PICKER ---
+function AvatarPicker({ value, onChange }: { value?: string; onChange: (id: string | undefined) => void }) {
+  return (
+    <div className="grid grid-cols-4 gap-3">
+      {AVATAR_PRESETS.map((avatar) => {
+        const selected = value === avatar.id;
+        return (
+          <button
+            key={avatar.id}
+            type="button"
+            onClick={() => onChange(selected ? undefined : avatar.id)}
+            className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all text-center
+              ${selected 
+                ? "border-primary bg-primary/10 shadow-[0_0_0_1px] shadow-primary" 
+                : "border-border hover:border-muted-foreground/50 bg-card"
+              }`}
+          >
+            <div 
+              className="w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-sm"
+              style={{ backgroundColor: avatar.color + "22", border: `2px solid ${avatar.color}44` }}
+            >
+              {avatar.emoji}
+            </div>
+            <div>
+              <p className="text-xs font-semibold leading-tight">{avatar.name}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{avatar.description}</p>
+            </div>
+            {selected && (
+              <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                <CheckCircle2 className="w-3 h-3 text-primary-foreground" />
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// --- DURATION PICKER ---
+function DurationPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      {DURATION_OPTIONS.map((opt) => {
+        const selected = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all
+              ${selected 
+                ? "border-primary bg-primary/10" 
+                : "border-border hover:border-muted-foreground/50 bg-card"
+              }`}
+          >
+            <span className="text-lg font-bold">{opt.label}</span>
+            <span className="text-xs text-muted-foreground">{opt.sub}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Home() {
   const { toast } = useToast();
   
-  // App State
   const [appState, setAppState] = useState<"form" | "generating" | "results">("form");
   const [jobId, setJobId] = useState<string | null>(null);
   
-  // Mutations & Queries
   const generateMutation = useAdgenGenerate();
   const regenerateMutation = useAdgenRegenerate();
   
@@ -144,7 +232,6 @@ export default function Home() {
     }
   );
 
-  // Status effect listener
   useEffect(() => {
     if (jobStatus) {
       if (jobStatus.status === "done") {
@@ -164,7 +251,6 @@ export default function Home() {
     }
   }, [jobStatus, toast]);
 
-  // Form Setup
   const form = useForm<AdgenFormValues>({
     resolver: zodResolver(adgenSchema),
     defaultValues: {
@@ -174,6 +260,8 @@ export default function Home() {
       adAngle: "us-vs-them",
       platform: "tiktok",
       aspectRatio: "9:16",
+      videoDuration: "30s",
+      selectedAvatarId: undefined,
       hookStyle: "bold-statement",
       voiceoverLanguage: "english",
       creativeVision: "",
@@ -183,11 +271,11 @@ export default function Home() {
   const onSubmit = (data: AdgenFormValues) => {
     setAppState("generating");
     
-    generateMutation.mutate({ data }, {
+    generateMutation.mutate({ data: data as any }, {
       onSuccess: (res) => {
         setJobId(res.jobId);
       },
-      onError: (err) => {
+      onError: () => {
         setAppState("form");
         toast({
           title: "Error starting job",
@@ -260,7 +348,7 @@ export default function Home() {
               </div>
 
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                   
                   {/* Basics */}
                   <div className="space-y-4 bg-card p-6 rounded-xl border border-border">
@@ -331,10 +419,56 @@ export default function Home() {
                     />
                   </div>
 
-                  {/* Creative Strategy */}
+                  {/* Creator Persona */}
                   <div className="space-y-4 bg-card p-6 rounded-xl border border-border">
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                       <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs">2</div>
+                      <User className="w-4 h-4" />
+                      Creator Persona
+                      <span className="text-xs font-normal text-muted-foreground ml-1">(optional)</span>
+                    </h2>
+                    <p className="text-sm text-muted-foreground -mt-2">Pick a persona — the AI will write the script in their voice and style.</p>
+                    
+                    <FormField
+                      control={form.control}
+                      name="selectedAvatarId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <AvatarPicker value={field.value} onChange={field.onChange} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Video Duration */}
+                  <div className="space-y-4 bg-card p-6 rounded-xl border border-border">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs">3</div>
+                      <Clock className="w-4 h-4" />
+                      Video Duration
+                    </h2>
+                    
+                    <FormField
+                      control={form.control}
+                      name="videoDuration"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <DurationPicker value={field.value} onChange={field.onChange} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Creative Strategy */}
+                  <div className="space-y-4 bg-card p-6 rounded-xl border border-border">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs">4</div>
                       Creative Strategy
                     </h2>
                     
@@ -432,7 +566,7 @@ export default function Home() {
                   {/* Output Format */}
                   <div className="space-y-4 bg-card p-6 rounded-xl border border-border">
                     <h2 className="text-lg font-semibold flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs">3</div>
+                      <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs">5</div>
                       Output Format
                     </h2>
                     
@@ -485,7 +619,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Hidden form submission button - triggered by the sidebar button */}
                   <button type="submit" id="submit-form-btn" className="hidden" />
                 </form>
               </Form>
@@ -506,18 +639,10 @@ export default function Home() {
                   
                   <FileUploadField 
                     label="Reference Video" 
-                    description="Upload a UGC video you like — the AI will match its energy and style."
+                    description="Upload a UGC video you like — the AI will match its style."
                     accept="video/*" 
                     icon={Video}
                     onChange={(b64) => form.setValue("referenceVideoBase64", b64)} 
-                  />
-                  
-                  <FileUploadField 
-                    label="Creator Avatar" 
-                    description="Face for the AI talking head."
-                    accept="image/*" 
-                    icon={Upload}
-                    onChange={(b64) => form.setValue("creatorAvatarBase64", b64)} 
                   />
                 </div>
 
@@ -531,7 +656,7 @@ export default function Home() {
                     {generateMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Sparkles className="w-5 h-5 mr-2" />}
                     Generate Ad
                   </Button>
-                  <p className="text-xs text-center text-muted-foreground mt-3">Estimated time: ~2 minutes</p>
+                  <p className="text-xs text-center text-muted-foreground mt-3">Estimated time: ~2–3 minutes</p>
                 </div>
               </div>
             </div>
@@ -554,8 +679,6 @@ export default function Home() {
                 <div className="absolute left-[15px] top-4 bottom-4 w-[2px] bg-muted z-0"></div>
                 
                 {STEPS.map((stepName, i) => {
-                  // Determine active step logic
-                  // If status is running, we use jobStatus.stepIndex.
                   const activeStepIndex = jobStatus?.stepIndex ?? 0;
                   const isCompleted = i < activeStepIndex;
                   const isActive = i === activeStepIndex;
@@ -580,7 +703,7 @@ export default function Home() {
                         )}
                       </div>
                     </div>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -592,13 +715,10 @@ export default function Home() {
           <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             
             {jobStatus.audioWarning && (
-              <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Notice</AlertTitle>
-                <AlertDescription>
-                  {jobStatus.audioWarning}
-                </AlertDescription>
-              </Alert>
+              <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive text-sm">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{jobStatus.audioWarning}</span>
+              </div>
             )}
 
             <div className="flex items-center justify-between">

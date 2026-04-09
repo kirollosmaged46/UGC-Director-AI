@@ -1,10 +1,14 @@
 import { Storage } from "@google-cloud/storage";
 import { randomUUID } from "crypto";
 import { writeFileSync, unlinkSync } from "fs";
+import { copyFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
+import { logger } from "./logger.js";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+
+export const LOCAL_VIDEOS_DIR = join(process.cwd(), "data", "videos");
 
 function buildGcsClient(): Storage {
   const credContent = JSON.stringify({
@@ -18,8 +22,6 @@ function buildGcsClient(): Storage {
     },
     universe_domain: "googleapis.com",
   });
-  // GCS client reads keyFilename lazily on first auth request, so the file
-  // must remain on disk. Schedule cleanup at process exit.
   const credPath = join(tmpdir(), `gcs-creds-${randomUUID()}.json`);
   writeFileSync(credPath, credContent, { mode: 0o600 });
   process.once("exit", () => {
@@ -34,12 +36,17 @@ export interface IVideoStorage {
 
 const gcs = buildGcsClient();
 
-async function uploadVideoAndGetUrl(localPath: string): Promise<string> {
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-  if (!bucketId) {
-    throw new Error("DEFAULT_OBJECT_STORAGE_BUCKET_ID not set — run object storage setup");
-  }
+async function saveLocally(localPath: string): Promise<string> {
+  await mkdir(LOCAL_VIDEOS_DIR, { recursive: true });
+  const filename = `${randomUUID()}.mp4`;
+  const destPath = join(LOCAL_VIDEOS_DIR, filename);
+  await copyFile(localPath, destPath);
+  logger.info({ destPath }, "Video saved locally (no object storage bucket configured)");
+  return `/api/adgen/videos/${filename}`;
+}
 
+async function uploadToGcs(localPath: string): Promise<string> {
+  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID!;
   const objectName = `ugc-videos/${randomUUID()}.mp4`;
 
   await gcs.bucket(bucketId).upload(localPath, {
@@ -69,6 +76,14 @@ async function uploadVideoAndGetUrl(localPath: string): Promise<string> {
 
   const { signed_url: signedUrl } = (await response.json()) as { signed_url: string };
   return signedUrl;
+}
+
+async function uploadVideoAndGetUrl(localPath: string): Promise<string> {
+  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+  if (!bucketId) {
+    return saveLocally(localPath);
+  }
+  return uploadToGcs(localPath);
 }
 
 export const videoStorage: IVideoStorage = { uploadVideoAndGetUrl };

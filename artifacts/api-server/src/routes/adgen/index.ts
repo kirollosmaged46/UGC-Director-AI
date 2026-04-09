@@ -1,8 +1,12 @@
 import { Router } from "express";
+import { createReadStream, existsSync } from "fs";
+import { join } from "path";
 import { z } from "zod";
 import { createJob, getJob } from "./queue.js";
 import { runPipeline } from "./pipeline.js";
 import { logger } from "../../lib/logger.js";
+import { LOCAL_VIDEOS_DIR } from "../../lib/videoStorage.js";
+import { AVATAR_PRESETS } from "./avatars.js";
 
 const router = Router();
 
@@ -13,6 +17,8 @@ const AdgenGenerateBodySchema = z.object({
   adAngle: z.enum(["us-vs-them", "before-after", "social-proof"]),
   platform: z.enum(["tiktok", "instagram-reels", "youtube-shorts"]),
   aspectRatio: z.enum(["9:16", "1:1", "4:5"]),
+  videoDuration: z.enum(["15s", "30s", "60s"]).optional().default("30s"),
+  selectedAvatarId: z.string().optional(),
   productImageBase64: z.string().optional(),
   referenceVideoBase64: z.string().optional(),
   creatorAvatarBase64: z.string().optional(),
@@ -61,6 +67,24 @@ router.get("/status/:jobId", (req, res) => {
     audioWarning: job.audioWarning,
     result: job.result,
   });
+});
+
+router.get("/avatars", (_req, res) => {
+  return res.json({ avatars: AVATAR_PRESETS });
+});
+
+router.get("/videos/:filename", (req, res) => {
+  const { filename } = req.params;
+  if (!/^[\w-]+\.mp4$/.test(filename)) {
+    return res.status(400).json({ error: "Invalid filename" });
+  }
+  const filePath = join(LOCAL_VIDEOS_DIR, filename);
+  if (!existsSync(filePath)) {
+    return res.status(404).json({ error: "Video not found" });
+  }
+  res.setHeader("Content-Type", "video/mp4");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  createReadStream(filePath).pipe(res);
 });
 
 router.post("/regenerate/:jobId", async (req, res) => {

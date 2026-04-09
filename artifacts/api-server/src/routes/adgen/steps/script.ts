@@ -1,46 +1,62 @@
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import type { AdgenInputs, AdScript } from "../types.js";
 import { logger } from "../../../lib/logger.js";
+import { AVATAR_PRESETS } from "../avatars.js";
 
-const SYSTEM_PROMPT = `You are a world-class UGC creative director. You write video ad scripts that feel completely real — not corporate, not polished, not AI. Think Arcads, Billo, real TikTok creators who actually use the product.
+type DurationConfig = {
+  sceneCount: number;
+  sceneDuration: number;
+  hookDuration: number;
+  ctaDuration: number;
+};
+
+function getDurationConfig(duration?: string): DurationConfig {
+  switch (duration) {
+    case "15s":
+      return { sceneCount: 2, sceneDuration: 4, hookDuration: 3, ctaDuration: 4 };
+    case "60s":
+      return { sceneCount: 8, sceneDuration: 6, hookDuration: 4, ctaDuration: 5 };
+    case "30s":
+    default:
+      return { sceneCount: 4, sceneDuration: 5, hookDuration: 3, ctaDuration: 4 };
+  }
+}
+
+function buildSceneTemplate(count: number, duration: number): string {
+  return Array.from({ length: count }, (_, i) => JSON.stringify({
+    scene_number: i + 1,
+    duration_seconds: duration,
+    visual: "exact camera description — location, framing, action, lighting",
+    voiceover: "what the creator says — casual, first person, imperfect",
+    emotion: "what the viewer feels",
+  }, null, 2)).join(",\n    ");
+}
+
+function buildSystemPrompt(inputs: AdgenInputs): string {
+  const cfg = getDurationConfig(inputs.videoDuration);
+  const avatar = inputs.selectedAvatarId
+    ? AVATAR_PRESETS.find((a) => a.id === inputs.selectedAvatarId)
+    : null;
+
+  const avatarContext = avatar
+    ? `\nCREATOR PERSONA: ${avatar.name} — ${avatar.description}. Style: ${avatar.style}.`
+    : "";
+
+  return `You are a world-class UGC creative director. You write video ad scripts that feel completely real — not corporate, not polished, not AI. Think Arcads, Billo, real TikTok creators who actually use the product.
 
 Return ONLY a valid JSON object. No explanation. No markdown. No preamble. Just raw JSON.
 
+TARGET LENGTH: ${inputs.videoDuration ?? "30s"} — write exactly ${cfg.sceneCount} scenes (each ~${cfg.sceneDuration}s), hook ~${cfg.hookDuration}s, CTA ~${cfg.ctaDuration}s.
+${avatarContext}
+
 Structure:
 {
-  "hook": "first 3 seconds — one punchy line or mid-action moment. No brand name. No greeting. Starts mid-thought or mid-action.",
+  "hook": "first ${cfg.hookDuration} seconds — one punchy line or mid-action moment. No brand name. No greeting. Starts mid-thought or mid-action.",
   "hook_variants": ["variant 1", "variant 2", "variant 3"],
   "scenes": [
-    {
-      "scene_number": 1,
-      "duration_seconds": 3,
-      "visual": "exact camera description — location, framing, action, what hands are doing, lighting quality",
-      "voiceover": "what the creator says — sounds like texting out loud, casual, imperfect, first person",
-      "emotion": "what the viewer feels in this moment"
-    },
-    {
-      "scene_number": 2,
-      "duration_seconds": 4,
-      "visual": "...",
-      "voiceover": "...",
-      "emotion": "..."
-    },
-    {
-      "scene_number": 3,
-      "duration_seconds": 4,
-      "visual": "...",
-      "voiceover": "...",
-      "emotion": "..."
-    },
-    {
-      "scene_number": 4,
-      "duration_seconds": 4,
-      "visual": "...",
-      "voiceover": "...",
-      "emotion": "..."
-    }
+    ${buildSceneTemplate(cfg.sceneCount, cfg.sceneDuration)}
   ],
-  "cta": "last 3 seconds — casual first-person. Never say click the link or buy now.",
+  "cta": "last ${cfg.ctaDuration} seconds — casual first-person. Never say click the link or buy now.",
   "caption": "platform-native caption with emojis under 150 chars"
 }
 
@@ -62,15 +78,22 @@ AUTHENTICITY NON-NEGOTIABLES:
 - Lighting is imperfect: window light, lamp, outdoor shade — never studio flash
 - Voiceover has natural pauses and filler — "honestly", "like", "I was not expecting this"
 - If Arabic: Gulf dialect, casual, conversational — never formal or MSA`;
+}
 
 function buildUserMessage(inputs: AdgenInputs): string {
+  const avatar = inputs.selectedAvatarId
+    ? AVATAR_PRESETS.find((a) => a.id === inputs.selectedAvatarId)
+    : null;
+
   return `Product: ${inputs.productName}
 Category: ${inputs.productCategory}
 Description: ${inputs.productDescription}
 Ad Angle: ${inputs.adAngle}
 Platform: ${inputs.platform}
+Target Duration: ${inputs.videoDuration ?? "30s"}
 Hook Style: ${inputs.hookStyle ?? "none specified"}
 Language: ${inputs.voiceoverLanguage ?? "english"}
+Creator Persona: ${avatar ? `${avatar.name} — ${avatar.description}` : "unspecified"}
 Reference video provided: ${inputs.referenceVideoBase64 ? "yes" : "no"}
 Creative Vision: ${inputs.creativeVision ?? "none"}
 
@@ -94,7 +117,7 @@ export async function generateScript(inputs: AdgenInputs): Promise<AdScript> {
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 8192,
-        system: SYSTEM_PROMPT,
+        system: buildSystemPrompt(inputs),
         messages: [
           { role: "user", content: attempt === 0 ? userContent : buildUserMessage(inputs) },
           ...(attempt === 1
