@@ -7,13 +7,13 @@ import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
 import sharp from "sharp";
-import { Modality } from "@google/genai";
-import { ai } from "@workspace/integrations-gemini-ai";
 import { videoStorage } from "../../lib/videoStorage";
 import { AD_ANGLE_ENUM, type AdAngle, ModelConceptSchema, buildUgcPrompt } from "./helpers.js";
 
 const execFileAsync = promisify(execFile);
 const router = Router();
+
+// ─── Schemas ────────────────────────────────────────────────────────────────
 
 const GenerateSchema = z.object({
   imageBase64: z.string().min(1, "imageBase64 is required").max(20_000_000, "image too large"),
@@ -52,6 +52,8 @@ const HooksSchema = z.object({
 const ModelHookSchema = z.object({ text: z.string().min(1), platform: z.string() });
 const ModelHooksResponseSchema = z.object({ hooks: z.array(ModelHookSchema) });
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
 function ffmpegDimensions(ratio: string): { w: number; h: number } {
   if (ratio === "9:16" || ratio === "4:5") return { w: 1024, h: 1536 };
   if (ratio === "16:9") return { w: 1536, h: 1024 };
@@ -59,51 +61,164 @@ function ffmpegDimensions(ratio: string): { w: number; h: number } {
 }
 
 async function normalizeToRgbaPng(inputBuffer: Buffer): Promise<Buffer> {
-  return sharp(inputBuffer)
-    .ensureAlpha()
-    .png({ compressionLevel: 6 })
-    .toBuffer();
+  return sharp(inputBuffer).ensureAlpha().png({ compressionLevel: 6 }).toBuffer();
 }
 
-async function generateUgcImage(
-  productBase64: string,
+// ─── Gemini helpers (direct REST, no SDK import to avoid bundling issues) ───
+
+const GEMINI_BASE = "https://generativelanguage.googleapis.com";
+
+function geminiKey(): string {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY is not set");
+  return key;
+}
+
+async function geminiGenerateText(model: string, prompt: string): Promise<string> {
+  const url = `${GEMINI_BASE}/v1beta/models/${model}:generateContent?key=${geminiKey()}`;
+  const body = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: 8192 },
+  };
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`Gemini text generation failed: ${resp.status} ${err}`);
+  }
+  const json = await resp.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  return json.candidates?.[0]?.content?.parts?.find(p => p.text)?.text ?? "";
+}
+
+async function geminiGenerateImage(
+  model: string,
   prompt: string,
+  imagePngBase64: string
 ): Promise<Buffer> {
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-image",
+  const url = `${GEMINI_BASE}/v1beta/models/${model}:generateContent?key=${geminiKey()}`;
+  const body = {
     contents: [
       {
         role: "user",
         parts: [
-          {
-            inlineData: {
-              mimeType: "image/png",
-              data: productBase64,
-            },
-          },
+          { inline_data: { mime_type: "image/png", data: imagePngBase64 } },
           { text: prompt },
         ],
       },
     ],
-    config: {
-      responseModalities: [Modality.IMAGE, Modality.TEXT],
+    generationConfig: {
+      responseModalities: ["IMAGE", "TEXT"],
       maxOutputTokens: 8192,
     },
+  };
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
-
-  const candidate = response.candidates?.[0];
-  const imagePart = candidate?.content?.parts?.find(
-    (part: { inlineData?: { data?: string; mimeType?: string } }) => part.inlineData,
-  );
-
-  if (!imagePart?.inlineData?.data) {
-    throw new Error("No image data returned from Gemini");
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`Gemini image generation failed: ${resp.status} ${err}`);
   }
-
+  const json = await resp.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>
+  };
+  const imagePart = json.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+  if (!imagePart?.inlineData?.data) {
+    throw new Error("No image data returned from Gemini image model");
+  }
   return Buffer.from(imagePart.inlineData.data, "base64");
 }
 
-// Ken Burns zoom directions — safe values that stay within frame bounds
+// ─── Veo 3 video generation ──────────────────────────────────────────────────
+
+async function generateVeo3Video(
+  prompt: string,
+  aspectRatio: string,
+  durationSeconds: number
+): Promise<Buffer> {
+  const key = geminiKey();
+
+  // Map aspect ratio to Veo accepted values
+  const veoAspectRatio =
+    aspectRatio === "9:16" ? "9:16"
+    : aspectRatio === "16:9" ? "16:9"
+    : aspectRatio === "1:1" ? "1:1"
+    : "9:16"; // default for 4:5
+
+  // Clamp duration: Veo 3 supports 5–8 seconds per clip
+  const clampedDuration = Math.min(8, Math.max(5, durationSeconds));
+
+  // Start generation
+  const startUrl = `${GEMINI_BASE}/v1beta/models/veo-3.0-generate-preview:predictLongRunning?key=${key}`;
+  const startBody = {
+    instances: [{ prompt }],
+    parameters: {
+      aspectRatio: veoAspectRatio,
+      durationSeconds: clampedDuration,
+      numberOfVideos: 1,
+      enhancePrompt: true,
+      generateAudio: true,
+    },
+  };
+
+  const startResp = await fetch(startUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(startBody),
+  });
+
+  if (!startResp.ok) {
+    const err = await startResp.text();
+    throw new Error(`Veo 3 start failed: ${startResp.status} ${err}`);
+  }
+
+  const operation = await startResp.json() as { name?: string; done?: boolean; response?: { videos?: Array<{ uri?: string; bytesBase64Encoded?: string }> }; error?: { message: string } };
+  const opName = operation.name;
+  if (!opName) throw new Error("Veo 3: no operation name returned");
+
+  // Poll until done (max 5 minutes)
+  const pollUrl = `${GEMINI_BASE}/v1beta/${opName}?key=${key}`;
+  const deadline = Date.now() + 5 * 60 * 1000;
+
+  let result = operation;
+  while (!result.done) {
+    if (Date.now() > deadline) throw new Error("Veo 3 generation timed out after 5 minutes");
+    await new Promise(r => setTimeout(r, 10_000));
+    const pollResp = await fetch(pollUrl, { headers: { "Content-Type": "application/json" } });
+    if (!pollResp.ok) {
+      const err = await pollResp.text();
+      throw new Error(`Veo 3 poll failed: ${pollResp.status} ${err}`);
+    }
+    result = await pollResp.json() as typeof result;
+  }
+
+  if (result.error) throw new Error(`Veo 3 generation error: ${result.error.message}`);
+
+  const videos = result.response?.videos;
+  if (!videos?.length) throw new Error("Veo 3: no videos in response");
+
+  const video = videos[0];
+
+  // Prefer inline base64 data; fall back to URI download
+  if (video.bytesBase64Encoded) {
+    return Buffer.from(video.bytesBase64Encoded, "base64");
+  }
+
+  if (video.uri) {
+    const dlResp = await fetch(`${video.uri}&key=${key}`);
+    if (!dlResp.ok) throw new Error(`Veo 3 video download failed: ${dlResp.status}`);
+    return Buffer.from(await dlResp.arrayBuffer());
+  }
+
+  throw new Error("Veo 3: video has neither bytesBase64Encoded nor uri");
+}
+
+// ─── FFmpeg Ken Burns (fallback when Veo 3 not used for all content) ─────────
+
 const ZOOM_DIRECTIONS = [
   `z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
   `z='min(zoom+0.0015,1.2)':x='0':y='0'`,
@@ -128,34 +243,22 @@ async function buildVideoFromKeyframes(
     const clipPath = path.join(tmpDir, `ugc-clip-${i}-${randomUUID()}.mp4`);
     const zoomDir = ZOOM_DIRECTIONS[i % ZOOM_DIRECTIONS.length];
     await execFileAsync("ffmpeg", [
-      "-framerate", String(fps),
-      "-loop", "1",
-      "-t", String(clipDur),
+      "-framerate", String(fps), "-loop", "1", "-t", String(clipDur),
       "-i", keyframePaths[i],
       "-vf", `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},zoompan=${zoomDir}:d=${d}:s=${w}x${h}:fps=${fps},fps=${fps}`,
-      "-c:v", "libx264",
-      "-pix_fmt", "yuv420p",
-      "-preset", "ultrafast",
-      "-r", String(fps),
-      "-y",
-      clipPath,
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "ultrafast",
+      "-r", String(fps), "-y", clipPath,
     ]);
     clipPaths.push(clipPath);
   }
 
-  const concatList = clipPaths.map((p) => `file '${p}'`).join("\n");
+  const concatList = clipPaths.map(p => `file '${p}'`).join("\n");
   const concatFile = path.join(tmpDir, `ugc-concat-${randomUUID()}.txt`);
   await writeFile(concatFile, concatList);
-
   try {
     await execFileAsync("ffmpeg", [
-      "-f", "concat",
-      "-safe", "0",
-      "-i", concatFile,
-      "-c", "copy",
-      "-movflags", "+faststart",
-      "-y",
-      outputPath,
+      "-f", "concat", "-safe", "0", "-i", concatFile,
+      "-c", "copy", "-movflags", "+faststart", "-y", outputPath,
     ]);
   } finally {
     for (const p of [...clipPaths, concatFile]) {
@@ -163,6 +266,8 @@ async function buildVideoFromKeyframes(
     }
   }
 }
+
+// ─── Routes ──────────────────────────────────────────────────────────────────
 
 router.post("/generate", async (req, res) => {
   const parsed = GenerateSchema.safeParse(req.body);
@@ -178,8 +283,9 @@ router.post("/generate", async (req, res) => {
   } = parsed.data;
 
   const avatarContext = avatarEnabled
-    ? `\nAVATAR CREATOR: ${avatarGender}, ${avatarEthnicity} ethnicity, ${avatarStyle} style, ${avatarLanguage}-speaking creator. The avatar is a photorealistic real-looking person who appears to be holding and presenting the product directly to camera. Their face, hands, arms, and clothing must be visible and natural. They look like a genuine UGC creator — not a model, not a stock photo person.`
+    ? `\nAVATAR CREATOR: ${avatarGender}, ${avatarEthnicity} ethnicity, ${avatarStyle} style, ${avatarLanguage}-speaking creator. The avatar is a photorealistic real-looking person holding and presenting the product directly to camera. Their face, hands, arms, and clothing must be visible and natural. They look like a genuine UGC creator — not a model, not a stock photo person.`
     : "";
+
   const tmpFiles: string[] = [];
 
   try {
@@ -189,100 +295,64 @@ router.post("/generate", async (req, res) => {
     const tmpDir = os.tmpdir();
 
     if (contentType === "video") {
-      const conceptResponse = await ai.models.generateContent({
-        model: "gemini-3.1-pro-preview",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `You are an expert UGC video director. Create a 3-scene video concept for an authentic UGC ad.
-
-Ad angle: ${angle === "us-vs-them" ? "Us vs. Them — show why this product wins" : angle === "before-after" ? "Before & After — transformation narrative" : "Social Proof — real people love this product"}
-Lighting: ${lighting}
-Aspect ratio: ${aspectRatio}
-Platform: ${platform}
-Product: ${productName ?? "this product"}
-Creative vision: ${creativeVision ?? "authentic lifestyle, real person energy"}${avatarContext}
-
-Rules:
-- Each scene is ${Math.round(videoDuration / 3)} seconds
-- Scenes build a narrative arc matching the ad angle
-- Feel like real UGC shot by a genuine user, not a brand shoot
-- No text overlays, no graphics — pure visual storytelling
-
-Return ONLY valid JSON:
-{
-  "title": "short catchy video title max 8 words",
-  "scenes": [
-    { "description": "Scene 1: detailed visual description of what the camera sees" },
-    { "description": "Scene 2: detailed visual description" },
-    { "description": "Scene 3: detailed visual description and payoff" }
-  ]
-}`,
-              },
-            ],
-          },
-        ],
-        config: { maxOutputTokens: 8192 },
+      // Step 1: generate a UGC-style image keyframe with Gemini image model
+      const imagePrompt = buildUgcPrompt({
+        angle, lighting, aspectRatio, platform, productName,
+        creativeVision: (creativeVision ?? "") + avatarContext,
       });
 
-      const raw = conceptResponse.text ?? "{}";
-      let concept: z.infer<typeof ModelConceptSchema>;
-      try {
-        const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
-        concept = ModelConceptSchema.parse(JSON.parse(cleaned));
-      } catch {
-        concept = {
-          title: "Authentic UGC Video",
-          scenes: [
-            { description: "Opening scene with product in hand, natural lighting" },
-            { description: "Close detail shot showing product quality and texture" },
-            { description: "Lifestyle payoff moment — product in use, genuine reaction" },
-          ],
-        };
-      }
+      const keyframeBuffer = await geminiGenerateImage(
+        "gemini-2.5-flash-preview-05-20",
+        imagePrompt,
+        productBase64
+      );
+      const kfPath = path.join(tmpDir, `ugc-kf-${randomUUID()}.png`);
+      await writeFile(kfPath, keyframeBuffer);
+      tmpFiles.push(kfPath);
 
-      const keyframePaths: string[] = new Array<string>(concept.scenes.length);
-      try {
-        await Promise.all(
-          concept.scenes.map(async (scene, i) => {
-            const scenePrompt = buildUgcPrompt({
-              angle,
-              lighting,
-              aspectRatio,
-              platform,
-              productName,
-              creativeVision: (creativeVision ?? "") + avatarContext,
-              sceneContext: scene.description,
-            });
-            const imgBuffer = await generateUgcImage(productBase64, scenePrompt);
-            const kfPath = path.join(tmpDir, `ugc-kf-${randomUUID()}.png`);
-            await writeFile(kfPath, imgBuffer);
-            tmpFiles.push(kfPath);
-            keyframePaths[i] = kfPath;
-          })
-        );
-      } catch (err) {
-        req.log.error({ err }, "Keyframe generation error");
-        throw err;
-      }
+      // Step 2: build a rich Veo 3 prompt from the UGC context
+      const angleDesc =
+        angle === "us-vs-them" ? "comparison showing why this product wins over alternatives"
+        : angle === "before-after" ? "before-and-after transformation narrative"
+        : "authentic social proof and unboxing moment";
+
+      const veoPrompt = [
+        `Authentic UGC-style short video ad for ${productName ?? "a product"}.`,
+        `Ad angle: ${angleDesc}.`,
+        `Lighting: ${lighting.replace("-", " ")}.`,
+        `Platform: ${platform} — feel like real content filmed on a smartphone, slightly imperfect, one-take energy.`,
+        creativeVision ? `Creative direction: ${creativeVision}.` : "",
+        avatarEnabled
+          ? `A real-looking ${avatarGender} creator of ${avatarEthnicity} ethnicity, ${avatarStyle} style, ${avatarLanguage}-speaking, holds and presents the product to camera naturally. Face, hands, and clothing visible.`
+          : "Product held naturally in frame with hands/forearms visible.",
+        "No text overlays. No studio backdrop. No corporate staging. Lived-in real setting.",
+        "Cinematic quality but genuine creator energy.",
+      ].filter(Boolean).join(" ");
+
+      // Step 3: generate video with Veo 3
+      const videoBuffer = await generateVeo3Video(veoPrompt, aspectRatio, videoDuration);
 
       const videoPath = path.join(tmpDir, `ugc-video-${randomUUID()}.mp4`);
+      await writeFile(videoPath, videoBuffer);
       tmpFiles.push(videoPath);
 
-      await buildVideoFromKeyframes(keyframePaths, videoPath, aspectRatio, videoDuration);
-
       const videoUrl = await videoStorage.uploadVideoAndGetUrl(videoPath);
-
       res.json({ images: [], videoUrl });
       return;
     }
 
+    // Photo generation
     const generatedImages = [];
     for (let i = 0; i < count; i++) {
-      const prompt = buildUgcPrompt({ angle, lighting, aspectRatio, platform, productName, creativeVision: (creativeVision ?? "") + avatarContext });
-      const imgBuffer = await generateUgcImage(productBase64, prompt);
+      const prompt = buildUgcPrompt({
+        angle, lighting, aspectRatio, platform, productName,
+        creativeVision: (creativeVision ?? "") + avatarContext,
+      });
+      const imgBuffer = await geminiGenerateImage(
+        "gemini-2.5-flash-preview-05-20",
+        prompt,
+        productBase64
+      );
       generatedImages.push({
         b64_json: imgBuffer.toString("base64"),
         index: i,
@@ -296,11 +366,7 @@ Return ONLY valid JSON:
     res.status(500).json({ error: "Failed to generate UGC content" });
   } finally {
     for (const f of tmpFiles) {
-      try {
-        await unlink(f);
-      } catch {
-        // ignore cleanup errors
-      }
+      try { await unlink(f); } catch { /* ignore */ }
     }
   }
 });
@@ -317,19 +383,14 @@ router.post("/hooks", async (req, res) => {
   try {
     const platformGuide =
       platform === "tiktok"
-        ? "TikTok (punchy hooks, Gen Z voice, 'POV:', 'Tell me why...', 'You need this if...' formats work well)"
+        ? "TikTok (punchy hooks, Gen Z voice, 'POV:', 'Tell me why...', 'You need this if...' formats)"
         : platform === "instagram"
-        ? "Instagram Reels (lifestyle-focused, mix of curiosity + aspiration, slightly more polished than TikTok)"
+        ? "Instagram Reels (lifestyle-focused, curiosity + aspiration, slightly more polished than TikTok)"
         : "YouTube Shorts (value-driven, problem-solution framing, optimized for watch time)";
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `You are an elite UGC content strategist. Generate ${count} scroll-stopping hooks/captions for ${platformGuide}.
+    const raw = await geminiGenerateText(
+      "gemini-2.5-pro",
+      `You are an elite UGC content strategist. Generate ${count} scroll-stopping hooks/captions for ${platformGuide}.
 
 Product: ${productDescription}
 Tone: ${tone}
@@ -342,21 +403,15 @@ Rules:
 - Each hook must be under 150 characters
 - No emojis
 
-Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${platform}" }, ...] } with exactly ${count} hooks.`,
-            },
-          ],
-        },
-      ],
-      config: { maxOutputTokens: 8192 },
-    });
+Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${platform}" }, ...] } with exactly ${count} hooks.`
+    );
 
-    const raw = response.text ?? '{"hooks":[]}';
     try {
       const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
       const validated = ModelHooksResponseSchema.parse(JSON.parse(cleaned));
       res.json(validated);
     } catch {
-      req.log.warn({ raw }, "Failed to parse or validate hooks JSON from Gemini; returning empty list");
+      req.log.warn({ raw }, "Failed to parse hooks JSON");
       res.json({ hooks: [] });
     }
   } catch (err) {
@@ -389,14 +444,9 @@ router.post("/scripts", async (req, res) => {
       : "YouTube Shorts: value-driven, problem-solution, slightly longer sentences. Optimized for watch time.";
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `You are an elite UGC ad scriptwriter. Generate ${count} distinct script options for the following product.
+    const raw = await geminiGenerateText(
+      "gemini-2.5-pro",
+      `You are an elite UGC ad scriptwriter. Generate ${count} distinct script options for the following product.
 
 PRODUCT: ${productName}
 ${productDescription ? `DESCRIPTION: ${productDescription}` : ""}
@@ -425,21 +475,15 @@ Return ONLY valid JSON in this exact format:
   ]
 }
 
-Generate exactly ${count} distinct scripts with different hooks and angles. No two should feel the same.`,
-            },
-          ],
-        },
-      ],
-      config: { maxOutputTokens: 8192 },
-    });
+Generate exactly ${count} distinct scripts with different hooks and angles. No two should feel the same.`
+    );
 
-    const raw = response.text ?? '{"scripts":[]}';
     try {
       const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
       const parsedJson = JSON.parse(cleaned) as { scripts: Array<{ hook: string; body: string; cta: string; platform: string }> };
       res.json({ scripts: parsedJson.scripts ?? [] });
     } catch {
-      req.log.warn({ raw }, "Failed to parse scripts JSON from Gemini");
+      req.log.warn({ raw }, "Failed to parse scripts JSON");
       res.json({ scripts: [] });
     }
   } catch (err) {
