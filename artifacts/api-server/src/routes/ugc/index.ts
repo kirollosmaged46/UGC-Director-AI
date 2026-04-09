@@ -2,13 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { openai, toFile, type ImageEditSize } from "@workspace/integrations-openai-ai-server";
 import { writeFile, unlink } from "fs/promises";
-import { createReadStream } from "fs";
 import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
 import sharp from "sharp";
+import { Modality } from "@google/genai";
+import { ai } from "@workspace/integrations-gemini-ai";
 import { videoStorage } from "../../lib/videoStorage";
 import { AD_ANGLE_ENUM, type AdAngle, ModelConceptSchema, buildUgcPrompt } from "./helpers.js";
 
@@ -52,12 +52,6 @@ const HooksSchema = z.object({
 const ModelHookSchema = z.object({ text: z.string().min(1), platform: z.string() });
 const ModelHooksResponseSchema = z.object({ hooks: z.array(ModelHookSchema) });
 
-function aspectRatioToSize(ratio: string): ImageEditSize {
-  if (ratio === "9:16" || ratio === "4:5") return "1024x1536";
-  if (ratio === "16:9") return "1536x1024";
-  return "1024x1024";
-}
-
 function ffmpegDimensions(ratio: string): { w: number; h: number } {
   if (ratio === "9:16" || ratio === "4:5") return { w: 1024, h: 1536 };
   if (ratio === "16:9") return { w: 1536, h: 1024 };
@@ -71,27 +65,49 @@ async function normalizeToRgbaPng(inputBuffer: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
-async function editProductImage(
-  imagePath: string,
+async function generateUgcImage(
+  productBase64: string,
   prompt: string,
-  size: ImageEditSize = "1024x1024"
 ): Promise<Buffer> {
-  const fileObj = await toFile(createReadStream(imagePath), "product.png", { type: "image/png" });
-  const response = (await openai.images.edit({
-    model: "gpt-image-1",
-    image: fileObj,
-    prompt,
-    size,
-  } as Parameters<typeof openai.images.edit>[0])) as { data?: Array<{ b64_json?: string }> };
-  const b64 = (response.data ?? [])[0]?.b64_json ?? "";
-  return Buffer.from(b64, "base64");
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-image",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inlineData: {
+              mimeType: "image/png",
+              data: productBase64,
+            },
+          },
+          { text: prompt },
+        ],
+      },
+    ],
+    config: {
+      responseModalities: [Modality.IMAGE, Modality.TEXT],
+      maxOutputTokens: 8192,
+    },
+  });
+
+  const candidate = response.candidates?.[0];
+  const imagePart = candidate?.content?.parts?.find(
+    (part: { inlineData?: { data?: string; mimeType?: string } }) => part.inlineData,
+  );
+
+  if (!imagePart?.inlineData?.data) {
+    throw new Error("No image data returned from Gemini");
+  }
+
+  return Buffer.from(imagePart.inlineData.data, "base64");
 }
 
 // Ken Burns zoom directions — safe values that stay within frame bounds
 const ZOOM_DIRECTIONS = [
-  `z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,  // center zoom in
-  `z='min(zoom+0.0015,1.2)':x='0':y='0'`,                                  // top-left anchor
-  `z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='0'`,                  // top-center anchor
+  `z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
+  `z='min(zoom+0.0015,1.2)':x='0':y='0'`,
+  `z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='0'`,
 ];
 
 async function buildVideoFromKeyframes(
@@ -108,7 +124,6 @@ async function buildVideoFromKeyframes(
   const tmpDir = path.dirname(outputPath);
   const clipPaths: string[] = [];
 
-  // Pass 1: encode each keyframe as its own constant-fps clip
   for (let i = 0; i < n; i++) {
     const clipPath = path.join(tmpDir, `ugc-clip-${i}-${randomUUID()}.mp4`);
     const zoomDir = ZOOM_DIRECTIONS[i % ZOOM_DIRECTIONS.length];
@@ -128,7 +143,6 @@ async function buildVideoFromKeyframes(
     clipPaths.push(clipPath);
   }
 
-  // Pass 2: concat all clips into the final output
   const concatList = clipPaths.map((p) => `file '${p}'`).join("\n");
   const concatFile = path.join(tmpDir, `ugc-concat-${randomUUID()}.txt`);
   await writeFile(concatFile, concatList);
@@ -144,7 +158,6 @@ async function buildVideoFromKeyframes(
       outputPath,
     ]);
   } finally {
-    // Clean up intermediate clips and concat file
     for (const p of [...clipPaths, concatFile]) {
       try { await unlink(p); } catch { /* ignore */ }
     }
@@ -172,19 +185,18 @@ router.post("/generate", async (req, res) => {
   try {
     const rawBuffer = Buffer.from(imageBase64, "base64");
     const pngBuffer = await normalizeToRgbaPng(rawBuffer);
+    const productBase64 = pngBuffer.toString("base64");
     const tmpDir = os.tmpdir();
-    const productPath = path.join(tmpDir, `ugc-product-${randomUUID()}.png`);
-    await writeFile(productPath, pngBuffer);
-    tmpFiles.push(productPath);
 
     if (contentType === "video") {
-      const conceptResponse = await openai.chat.completions.create({
-        model: "gpt-5.2",
-        max_completion_tokens: 800,
-        messages: [
+      const conceptResponse = await ai.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: [
           {
             role: "user",
-            content: `You are an expert UGC video director. Create a 3-scene video concept for an authentic UGC ad.
+            parts: [
+              {
+                text: `You are an expert UGC video director. Create a 3-scene video concept for an authentic UGC ad.
 
 Ad angle: ${angle === "us-vs-them" ? "Us vs. Them — show why this product wins" : angle === "before-after" ? "Before & After — transformation narrative" : "Social Proof — real people love this product"}
 Lighting: ${lighting}
@@ -208,11 +220,14 @@ Return ONLY valid JSON:
     { "description": "Scene 3: detailed visual description and payoff" }
   ]
 }`,
+              },
+            ],
           },
         ],
+        config: { maxOutputTokens: 8192 },
       });
 
-      const raw = conceptResponse.choices[0]?.message?.content ?? "{}";
+      const raw = conceptResponse.text ?? "{}";
       let concept: z.infer<typeof ModelConceptSchema>;
       try {
         const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
@@ -241,9 +256,9 @@ Return ONLY valid JSON:
               creativeVision: (creativeVision ?? "") + avatarContext,
               sceneContext: scene.description,
             });
-            const buf = await editProductImage(productPath, scenePrompt, aspectRatioToSize(aspectRatio));
+            const imgBuffer = await generateUgcImage(productBase64, scenePrompt);
             const kfPath = path.join(tmpDir, `ugc-kf-${randomUUID()}.png`);
-            await writeFile(kfPath, buf);
+            await writeFile(kfPath, imgBuffer);
             tmpFiles.push(kfPath);
             keyframePaths[i] = kfPath;
           })
@@ -267,9 +282,9 @@ Return ONLY valid JSON:
     const generatedImages = [];
     for (let i = 0; i < count; i++) {
       const prompt = buildUgcPrompt({ angle, lighting, aspectRatio, platform, productName, creativeVision: (creativeVision ?? "") + avatarContext });
-      const editedBuffer = await editProductImage(productPath, prompt, aspectRatioToSize(aspectRatio));
+      const imgBuffer = await generateUgcImage(productBase64, prompt);
       generatedImages.push({
-        b64_json: editedBuffer.toString("base64"),
+        b64_json: imgBuffer.toString("base64"),
         index: i,
         aspectRatio,
       });
@@ -307,13 +322,14 @@ router.post("/hooks", async (req, res) => {
         ? "Instagram Reels (lifestyle-focused, mix of curiosity + aspiration, slightly more polished than TikTok)"
         : "YouTube Shorts (value-driven, problem-solution framing, optimized for watch time)";
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      max_completion_tokens: 1000,
-      messages: [
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-pro-preview",
+      contents: [
         {
           role: "user",
-          content: `You are an elite UGC content strategist. Generate ${count} scroll-stopping hooks/captions for ${platformGuide}.
+          parts: [
+            {
+              text: `You are an elite UGC content strategist. Generate ${count} scroll-stopping hooks/captions for ${platformGuide}.
 
 Product: ${productDescription}
 Tone: ${tone}
@@ -327,17 +343,20 @@ Rules:
 - No emojis
 
 Return ONLY valid JSON: { "hooks": [{ "text": "hook text here", "platform": "${platform}" }, ...] } with exactly ${count} hooks.`,
+            },
+          ],
         },
       ],
+      config: { maxOutputTokens: 8192 },
     });
 
-    const raw = response.choices[0]?.message?.content ?? '{"hooks":[]}';
+    const raw = response.text ?? '{"hooks":[]}';
     try {
       const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
       const validated = ModelHooksResponseSchema.parse(JSON.parse(cleaned));
       res.json(validated);
     } catch {
-      req.log.warn({ raw }, "Failed to parse or validate hooks JSON from model; returning empty list");
+      req.log.warn({ raw }, "Failed to parse or validate hooks JSON from Gemini; returning empty list");
       res.json({ hooks: [] });
     }
   } catch (err) {
@@ -370,13 +389,14 @@ router.post("/scripts", async (req, res) => {
       : "YouTube Shorts: value-driven, problem-solution, slightly longer sentences. Optimized for watch time.";
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      max_completion_tokens: 2000,
-      messages: [
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-pro-preview",
+      contents: [
         {
           role: "user",
-          content: `You are an elite UGC ad scriptwriter. Generate ${count} distinct script options for the following product.
+          parts: [
+            {
+              text: `You are an elite UGC ad scriptwriter. Generate ${count} distinct script options for the following product.
 
 PRODUCT: ${productName}
 ${productDescription ? `DESCRIPTION: ${productDescription}` : ""}
@@ -406,17 +426,20 @@ Return ONLY valid JSON in this exact format:
 }
 
 Generate exactly ${count} distinct scripts with different hooks and angles. No two should feel the same.`,
+            },
+          ],
         },
       ],
+      config: { maxOutputTokens: 8192 },
     });
 
-    const raw = response.choices[0]?.message?.content ?? '{"scripts":[]}';
+    const raw = response.text ?? '{"scripts":[]}';
     try {
       const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
-      const parsed = JSON.parse(cleaned) as { scripts: Array<{ hook: string; body: string; cta: string; platform: string }> };
-      res.json({ scripts: parsed.scripts ?? [] });
+      const parsedJson = JSON.parse(cleaned) as { scripts: Array<{ hook: string; body: string; cta: string; platform: string }> };
+      res.json({ scripts: parsedJson.scripts ?? [] });
     } catch {
-      req.log.warn({ raw }, "Failed to parse scripts JSON");
+      req.log.warn({ raw }, "Failed to parse scripts JSON from Gemini");
       res.json({ scripts: [] });
     }
   } catch (err) {
