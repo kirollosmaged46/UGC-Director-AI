@@ -183,3 +183,120 @@ export type GenerateHooksResponseHooksItem = {
 export interface GenerateHooksResponse {
   hooks: GenerateHooksResponseHooksItem[];
 }
+
+export type AdgenGenerateBodyProductCategory =
+  (typeof AdgenGenerateBodyProductCategory)[keyof typeof AdgenGenerateBodyProductCategory];
+
+export const AdgenGenerateBodyProductCategory = {
+  skincare: "skincare",
+  supplement: "supplement",
+  fashion: "fashion",
+  "food_&_beverage": "food & beverage",
+  home: "home",
+  tech: "tech",
+  other: "other",
+} as const;
+
+export type AdgenGenerateBodyAdAngle =
+  (typeof AdgenGenerateBodyAdAngle)[keyof typeof AdgenGenerateBodyAdAngle];
+
+export const AdgenGenerateBodyAdAngle = {
+  "us-vs-them": "us-vs-them",
+  "before-after": "before-after",
+  "social-proof": "social-proof",
+} as const;
+
+export type AdgenGenerateBodyPlatform =
+  (typeof AdgenGenerateBodyPlatform)[keyof typeof AdgenGenerateBodyPlatform];
+
+export const AdgenGenerateBodyPlatform = {
+  tiktok: "tiktok",
+  "instagram-reels": "instagram-reels",
+  "youtube-shorts": "youtube-shorts",
+} as const;
+
+export type AdgenGenerateBodyAspectRatio =
+  (typeof AdgenGenerateBodyAspectRatio)[keyof typeof AdgenGenerateBodyAspectRatio];
+
+export const AdgenGenerateBodyAspectRatio = {
+  "9:16": "9:16",
+  "1:1": "1:1",
+  "4:5": "4:5",
+} as const;
+
+export type AdgenGenerateBodyHookStyle =
+  (typeof AdgenGenerateBodyHookStyle)[keyof typeof AdgenGenerateBodyHookStyle];
+
+export const AdgenGenerateBodyHookStyle = {
+  question: "question",
+  "bold-statement": "bold-statement",
+  "mid-action": "mid-action",
+  "shocking-fact": "shocking-fact",
+  "i-tried-this": "i-tried-this",
+} as const;
+
+export type AdgenGenerateBodyVoiceoverLanguage =
+  (typeof AdgenGenerateBodyVoiceoverLanguage)[keyof typeof AdgenGenerateBodyVoiceoverLanguage];
+
+export const AdgenGenerateBodyVoiceoverLanguage = {
+  english: "english",
+  arabic: "arabic",
+} as const;
+
+export interface AdgenGenerateBody {
+  productName: string;
+  productCategory: AdgenGenerateBodyProductCategory;
+  productDescription: string;
+  adAngle: AdgenGenerateBodyAdAngle;
+  platform: AdgenGenerateBodyPlatform;
+  aspectRatio: AdgenGenerateBodyAspectRatio;
+  /** Optional base64-encoded product image */
+  productImageBase64?: string;
+  /** Optional base64-encoded reference video for style matching */
+  referenceVideoBase64?: string;
+  /** Optional base64-encoded creator avatar for talking head */
+  creatorAvatarBase64?: string;
+  hookStyle?: AdgenGenerateBodyHookStyle;
+  voiceoverLanguage?: AdgenGenerateBodyVoiceoverLanguage;
+  /** Optional creative direction text */
+  creativeVision?: string;
+}
+
+export interface AdgenJobStarted {
+  jobId: string;
+}
+
+export type AdgenJobStatusStatus =
+  (typeof AdgenJobStatusStatus)[keyof typeof AdgenJobStatusStatus];
+
+export const AdgenJobStatusStatus = {
+  queued: "queued",
+  running: "running",
+  done: "done",
+  failed: "failed",
+} as const;
+
+export type AdgenJobStatusResultScript = { [key: string]: unknown };
+
+export type AdgenJobStatusResult = {
+  videoUrl?: string;
+  hook?: string;
+  hookVariants?: string[];
+  caption?: string;
+  script?: AdgenJobStatusResultScript;
+};
+
+export interface AdgenJobStatus {
+  jobId: string;
+  status: AdgenJobStatusStatus;
+  currentStep?: string;
+  stepIndex: number;
+  totalSteps: number;
+  /** Warning message if voiceover generation failed but pipeline continued */
+  audioWarning?: string;
+  result?: AdgenJobStatusResult;
+}
+
+export interface AdgenError {
+  error: string;
+}

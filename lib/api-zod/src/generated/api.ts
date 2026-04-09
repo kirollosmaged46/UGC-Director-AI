@@ -184,3 +184,98 @@ export const GenerateUgcHooksResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Start a UGC ad generation job
+ */
+export const adgenGenerateBodyVoiceoverLanguageDefault = `english`;
+
+export const AdgenGenerateBody = zod.object({
+  productName: zod.string(),
+  productCategory: zod.enum([
+    "skincare",
+    "supplement",
+    "fashion",
+    "food & beverage",
+    "home",
+    "tech",
+    "other",
+  ]),
+  productDescription: zod.string(),
+  adAngle: zod.enum(["us-vs-them", "before-after", "social-proof"]),
+  platform: zod.enum(["tiktok", "instagram-reels", "youtube-shorts"]),
+  aspectRatio: zod.enum(["9:16", "1:1", "4:5"]),
+  productImageBase64: zod
+    .string()
+    .optional()
+    .describe("Optional base64-encoded product image"),
+  referenceVideoBase64: zod
+    .string()
+    .optional()
+    .describe("Optional base64-encoded reference video for style matching"),
+  creatorAvatarBase64: zod
+    .string()
+    .optional()
+    .describe("Optional base64-encoded creator avatar for talking head"),
+  hookStyle: zod
+    .enum([
+      "question",
+      "bold-statement",
+      "mid-action",
+      "shocking-fact",
+      "i-tried-this",
+    ])
+    .optional(),
+  voiceoverLanguage: zod
+    .enum(["english", "arabic"])
+    .default(adgenGenerateBodyVoiceoverLanguageDefault),
+  creativeVision: zod
+    .string()
+    .optional()
+    .describe("Optional creative direction text"),
+});
+
+export const AdgenGenerateResponse = zod.object({
+  jobId: zod.string(),
+});
+
+/**
+ * @summary Poll ad generation job status
+ */
+export const AdgenStatusParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const AdgenStatusResponse = zod.object({
+  jobId: zod.string(),
+  status: zod.enum(["queued", "running", "done", "failed"]),
+  currentStep: zod.string().optional(),
+  stepIndex: zod.number(),
+  totalSteps: zod.number(),
+  audioWarning: zod
+    .string()
+    .optional()
+    .describe(
+      "Warning message if voiceover generation failed but pipeline continued",
+    ),
+  result: zod
+    .object({
+      videoUrl: zod.string().optional(),
+      hook: zod.string().optional(),
+      hookVariants: zod.array(zod.string()).optional(),
+      caption: zod.string().optional(),
+      script: zod.object({}).passthrough().optional(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Regenerate ad from an existing job's inputs
+ */
+export const AdgenRegenerateParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const AdgenRegenerateResponse = zod.object({
+  jobId: zod.string(),
+});

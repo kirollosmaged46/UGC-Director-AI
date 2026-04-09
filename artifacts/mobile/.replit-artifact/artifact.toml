@@ -1,5 +1,5 @@
 kind = "mobile"
-previewPath = "/"
+previewPath = "/mobile"
 title = "UGC Creator"
 version = "1.0.0"
 id = "artifacts/mobile"

@@ -17,6 +17,10 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdgenError,
+  AdgenGenerateBody,
+  AdgenJobStarted,
+  AdgenJobStatus,
   CreateOpenaiConversationBody,
   GenerateHooksBody,
   GenerateHooksResponse,
@@ -797,4 +801,261 @@ export const useGenerateUgcHooks = <
   TContext
 > => {
   return useMutation(getGenerateUgcHooksMutationOptions(options));
+};
+
+/**
+ * @summary Start a UGC ad generation job
+ */
+export const getAdgenGenerateUrl = () => {
+  return `/api/adgen/generate`;
+};
+
+export const adgenGenerate = async (
+  adgenGenerateBody: AdgenGenerateBody,
+  options?: RequestInit,
+): Promise<AdgenJobStarted> => {
+  return customFetch<AdgenJobStarted>(getAdgenGenerateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adgenGenerateBody),
+  });
+};
+
+export const getAdgenGenerateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adgenGenerate>>,
+    TError,
+    { data: BodyType<AdgenGenerateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adgenGenerate>>,
+  TError,
+  { data: BodyType<AdgenGenerateBody> },
+  TContext
+> => {
+  const mutationKey = ["adgenGenerate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adgenGenerate>>,
+    { data: BodyType<AdgenGenerateBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return adgenGenerate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdgenGenerateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adgenGenerate>>
+>;
+export type AdgenGenerateMutationBody = BodyType<AdgenGenerateBody>;
+export type AdgenGenerateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Start a UGC ad generation job
+ */
+export const useAdgenGenerate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adgenGenerate>>,
+    TError,
+    { data: BodyType<AdgenGenerateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adgenGenerate>>,
+  TError,
+  { data: BodyType<AdgenGenerateBody> },
+  TContext
+> => {
+  return useMutation(getAdgenGenerateMutationOptions(options));
+};
+
+/**
+ * @summary Poll ad generation job status
+ */
+export const getAdgenStatusUrl = (jobId: string) => {
+  return `/api/adgen/status/${jobId}`;
+};
+
+export const adgenStatus = async (
+  jobId: string,
+  options?: RequestInit,
+): Promise<AdgenJobStatus> => {
+  return customFetch<AdgenJobStatus>(getAdgenStatusUrl(jobId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdgenStatusQueryKey = (jobId: string) => {
+  return [`/api/adgen/status/${jobId}`] as const;
+};
+
+export const getAdgenStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof adgenStatus>>,
+  TError = ErrorType<AdgenError>,
+>(
+  jobId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adgenStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAdgenStatusQueryKey(jobId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof adgenStatus>>> = ({
+    signal,
+  }) => adgenStatus(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof adgenStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdgenStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adgenStatus>>
+>;
+export type AdgenStatusQueryError = ErrorType<AdgenError>;
+
+/**
+ * @summary Poll ad generation job status
+ */
+
+export function useAdgenStatus<
+  TData = Awaited<ReturnType<typeof adgenStatus>>,
+  TError = ErrorType<AdgenError>,
+>(
+  jobId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adgenStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdgenStatusQueryOptions(jobId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Regenerate ad from an existing job's inputs
+ */
+export const getAdgenRegenerateUrl = (jobId: string) => {
+  return `/api/adgen/regenerate/${jobId}`;
+};
+
+export const adgenRegenerate = async (
+  jobId: string,
+  options?: RequestInit,
+): Promise<AdgenJobStarted> => {
+  return customFetch<AdgenJobStarted>(getAdgenRegenerateUrl(jobId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAdgenRegenerateMutationOptions = <
+  TError = ErrorType<AdgenError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adgenRegenerate>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adgenRegenerate>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  const mutationKey = ["adgenRegenerate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adgenRegenerate>>,
+    { jobId: string }
+  > = (props) => {
+    const { jobId } = props ?? {};
+
+    return adgenRegenerate(jobId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdgenRegenerateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adgenRegenerate>>
+>;
+
+export type AdgenRegenerateMutationError = ErrorType<AdgenError>;
+
+/**
+ * @summary Regenerate ad from an existing job's inputs
+ */
+export const useAdgenRegenerate = <
+  TError = ErrorType<AdgenError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adgenRegenerate>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adgenRegenerate>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  return useMutation(getAdgenRegenerateMutationOptions(options));
 };

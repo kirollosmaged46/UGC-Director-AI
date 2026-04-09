@@ -14,6 +14,8 @@ tags:
     description: OpenAI AI chat and image operations
   - name: ugc
     description: UGC content generation operations
+  - name: adgen
+    description: AI video ad generation pipeline
 paths:
   /healthz:
     get:
@@ -190,6 +192,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GenerateHooksResponse"
+  /adgen/generate:
+    post:
+      operationId: adgenGenerate
+      tags: [adgen]
+      summary: Start a UGC ad generation job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdgenGenerateBody"
+      responses:
+        "200":
+          description: Job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdgenJobStarted"
+  /adgen/status/{jobId}:
+    get:
+      operationId: adgenStatus
+      tags: [adgen]
+      summary: Poll ad generation job status
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdgenJobStatus"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdgenError"
+  /adgen/regenerate/{jobId}:
+    post:
+      operationId: adgenRegenerate
+      tags: [adgen]
+      summary: Regenerate ad from an existing job's inputs
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: New job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdgenJobStarted"
+        "404":
+          description: Original job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdgenError"
 components:
   schemas:
     HealthStatus:
@@ -375,3 +443,99 @@ components:
               - platform
       required:
         - hooks
+    AdgenGenerateBody:
+      type: object
+      properties:
+        productName:
+          type: string
+        productCategory:
+          type: string
+          enum: [skincare, supplement, fashion, "food & beverage", home, tech, other]
+        productDescription:
+          type: string
+        adAngle:
+          type: string
+          enum: [us-vs-them, before-after, social-proof]
+        platform:
+          type: string
+          enum: [tiktok, "instagram-reels", "youtube-shorts"]
+        aspectRatio:
+          type: string
+          enum: ["9:16", "1:1", "4:5"]
+        productImageBase64:
+          type: string
+          description: Optional base64-encoded product image
+        referenceVideoBase64:
+          type: string
+          description: Optional base64-encoded reference video for style matching
+        creatorAvatarBase64:
+          type: string
+          description: Optional base64-encoded creator avatar for talking head
+        hookStyle:
+          type: string
+          enum: [question, "bold-statement", "mid-action", "shocking-fact", "i-tried-this"]
+        voiceoverLanguage:
+          type: string
+          enum: [english, arabic]
+          default: english
+        creativeVision:
+          type: string
+          description: Optional creative direction text
+      required:
+        - productName
+        - productCategory
+        - productDescription
+        - adAngle
+        - platform
+        - aspectRatio
+    AdgenJobStarted:
+      type: object
+      properties:
+        jobId:
+          type: string
+      required:
+        - jobId
+    AdgenJobStatus:
+      type: object
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, done, failed]
+        currentStep:
+          type: string
+        stepIndex:
+          type: integer
+        totalSteps:
+          type: integer
+        audioWarning:
+          type: string
+          description: Warning message if voiceover generation failed but pipeline continued
+        result:
+          type: object
+          properties:
+            videoUrl:
+              type: string
+            hook:
+              type: string
+            hookVariants:
+              type: array
+              items:
+                type: string
+            caption:
+              type: string
+            script:
+              type: object
+      required:
+        - jobId
+        - status
+        - stepIndex
+        - totalSteps
+    AdgenError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
