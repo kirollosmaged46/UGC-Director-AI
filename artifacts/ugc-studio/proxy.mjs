@@ -1,7 +1,7 @@
 import http from "http";
 
-const PORT = Number(process.env.PORT ?? 3000);
-const BACKEND_PORT = 8080;
+const PORT = Number(process.env.PORT ?? 8080);
+const BACKEND_PORT = Number(process.env.BACKEND_PORT ?? 8081);
 
 const server = http.createServer((req, res) => {
   const opts = {

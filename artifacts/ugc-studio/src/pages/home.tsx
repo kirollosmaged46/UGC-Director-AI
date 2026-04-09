@@ -81,7 +81,7 @@ function FileUploadField({
 
   return (
     <div className="space-y-2">
-      <FormLabel>{label}</FormLabel>
+      <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{label}</label>
       {description && <p className="text-xs text-muted-foreground">{description}</p>}
       
       <div 
